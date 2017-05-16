@@ -365,6 +365,7 @@ def split(string, sep=None, nesting=None, minimal=False):
     '''
     if sep is None:
         sep = whitespace
+        minimal = True
     result = []
     depth = 0
     while True:
