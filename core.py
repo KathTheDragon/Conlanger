@@ -369,7 +369,7 @@ def split(string, sep=None, nesting=None, minimal=False):
     depth = 0
     while True:
         if minimal and (nesting is None or depth == nesting[0]):
-            string = string.strip(sep)
+            string = string.lstrip(sep)
         for i in range(len(string)):
             if string[i] in sep and (nesting is None or depth == nesting[0]):
                 result.append(string[:i])
@@ -380,7 +380,8 @@ def split(string, sep=None, nesting=None, minimal=False):
             elif nesting is not None and string[i] in nesting[2]:
                 depth -= 1
         else:
-            result.append(string)
+            if not minimal:
+                result.append(string)
             break
     return result
 
