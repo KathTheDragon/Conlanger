@@ -64,7 +64,10 @@ class Rule():
     
     Methods:
         apply       -- apply the rule to a word 
-    '''  
+    '''
+    
+    rule = ''
+    
     def __init__(self, rule='', cats=None): #format is tars>reps/envs!excs flag; envs, excs, and flag are all optional
         '''Constructor for Rule
         

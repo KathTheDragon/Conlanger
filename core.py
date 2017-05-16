@@ -381,7 +381,7 @@ def split(string, sep=None, nesting=None, minimal=False):
             elif nesting is not None and string[i] in nesting[2]:
                 depth -= 1
         else:
-            if not minimal:
+            if not minimal or string != '':
                 result.append(string)
             break
     return result
