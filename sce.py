@@ -7,10 +7,10 @@ Classes:
     Rule -- represents a sound change rule
 
 Functions:
-    parse_ruleset -- parses a sound change ruleset
-    parse_field   -- parse the fields of a rule
-    parse_flags   -- parse the flags of a rule
-    apply_ruleset -- applies a set of sound change rules to a set of words
+    compile_ruleset -- compiles a sound change ruleset
+    parse_field     -- parse the fields of a rule
+    parse_flags     -- parse the flags of a rule
+    apply_ruleset   -- applies a set of sound change rules to a set of words
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
@@ -27,9 +27,6 @@ Implement $ and syllables
 Implement " for copying previous segment
 Implement * in the target, with variants **, *?, **?
 Implement ^ for range indices
-Implement flag 'chance' for non-deterministic rule application
-Implement flag 'stop' to terminate execution if the rule succeeds
-Implement flag 'ditto' to only run a rule if the previous rule ran
 Implement extended category substitution
 Implement additional logic options for environments
 Implement repetition shorthand
@@ -40,12 +37,16 @@ Consider where to raise/handle exceptions
 '''
 
 from math import ceil
-from core import LangException, Cat, parse_syms, split
+from random import randint
+from core import LangException, Cat, Word, parse_syms, split
 
 #== Constants ==#
 MAX_RUNS = 10**3 #maximum number of times a rule may be repeated
 
 #== Exceptions ==#
+class RuleFailed(LangException):
+    '''Used to indicate that the rule failed to be applied.'''
+
 class WordUnchanged(LangException):
     '''Used to indicate that the word was not changed by the rule.'''
 
@@ -192,14 +193,13 @@ class Rule():
             if not indices:
                 indices = range(len(_matches))
             matches += [_matches[i] for i in indices]
-        matches = sorted(matches, reverse=True)
-        for match in matches:
-            self.apply_match(match, word)
+        results = [self.apply_match(match, word) for match in sorted(matches, reverse=True)]
         if self.flags['ltr']:
             word.reverse()
+        if not any(results):
+            raise RuleFailed
         if word.phones == phones:
             raise WordUnchanged
-        return word
     
     def apply_match(self, match, word):
         '''Apply a replacement if a match meets the rule condition.
@@ -207,6 +207,8 @@ class Rule():
         Arguments:
             match -- the match to be checked
             word  -- the word to check against
+        
+        Returns a bool.
         '''
         reps = self.reps.copy()
         index, tar, i = match
@@ -214,16 +216,16 @@ class Rule():
             for exc in self.excs: #if any exception matches, try checking else_
                 if word.match_env(exc, index, tar):
                     if self.else_ is not None:
-                        self.else_.apply_match(match, word)
-                    return
+                        return self.else_.apply_match(match, word)
+                    return False
             for env in self.envs: #if any environment matches, return the match
                 if word.match_env(env, index, tar):
                     rep = reps[i]
                     if len(rep) == 1 and isinstance(rep[0], Cat):
                         rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
                     word.replace(index, tar, rep)
-                    return
-            #rule failed
+                    return True
+            return False
         else:
             for env in self.envs: #if any environment matches, return the match
                 if word.match_env(env, index, tar):
@@ -231,26 +233,49 @@ class Rule():
                     if len(rep) == 1 and isinstance(rep[0], Cat):
                         rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
                     word.replace(index, tar, rep)
-                    return
+                    return True
             if self.else_ is not None: #try checking else_
-                self.else_.apply_match(match, word)
+                return self.else_.apply_match(match, word)
+            return False
 
 #== Functions ==#
-def parse_ruleset(ruleset, cats=None):
-    '''Parse a sound change ruleset.
+def parse_words(words, graphs=None):
+    '''Pares a wordlist.
     
     Arguments:
-        ruleset -- the set of rules to be parsed (str)
-        cats    -- the initial categories to be used to parse the rules (dict)
+        words  -- the words to be parsed (str)
+        graphs -- list of graphemes used to parse the words (list)
     
     Returns a list.
     '''
-    if cats is None:
-        cats = {}
+    if isinstance(words, str):
+        words = words.splitlines()
+    else:
+        words = words.copy()
+    for i in reversed(range(len(words))):
+        if words[i] == '':
+            del words[i]
+        elif isinstance(words[i], Word):
+            continue
+        else:
+            words[i] = Word(words[i], graphs)
+    return words
+
+def compile_ruleset(ruleset, cats=None):
+    '''Compile a sound change ruleset.
+    
+    Arguments:
+        ruleset -- the set of rules to be compiled (str)
+        cats    -- the initial categories to be used to compile the rules (dict)
+    
+    Returns a list.
+    '''
     if isinstance(ruleset, str):
         ruleset = ruleset.splitlines()
     else:
         ruleset = ruleset.copy()
+    if cats is None:
+        cats = {}
     for i in range(len(ruleset)):
         rule = ruleset[i]
         if rule == '':
@@ -320,7 +345,7 @@ def parse_flags(flags):
         
     Returns a dictionary.
     '''
-    _flags = {'ignore':0, 'ltr':0, 'repeat':1, 'age':1} #default values
+    _flags = {'ignore':0, 'ditto':0, 'stop':0, 'ltr':0, 'repeat':1, 'age':1, 'chance':100} #default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
@@ -333,34 +358,46 @@ def parse_flags(flags):
         _flags['age'] = MAX_RUNS
     return _flags
 
-def apply_ruleset(words, ruleset, cats=None, debug=False):
+def apply_ruleset(words, ruleset, graphs=None, cats=None, debug=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
         words   -- the words to which the rules are to be applied (list)
         ruleset -- the rules which are to be applied to the words (list)
-        cats    -- the initial categories to be used in ruleset parsing (dict)
+        cats    -- the initial categories to be used in ruleset compiling (dict)
     
     Returns a list.
     '''
-    words = words.copy()
+    words = parse_words(words, graphs)
+    ruleset = compile_ruleset(ruleset, cats)
     if cats is None:
         cats = {}
-    ruleset = parse_ruleset(ruleset, cats)
     rules = [] #we use a list to store rules, since they may be applied multiple times
+    applied = [False]*len(words) #for each word, we store a boolean noting whether a rule got applied or not
     for rule in ruleset:
         rules.append(rule)
         if debug:
             print('Words =',[str(word) for word in words]) #for debugging
         for i in range(len(words)):
-            for rule in reversed(rules):
-                if debug:
-                    print('rule =',rule) #for debugging
-                for j in range(rule.flags['repeat']):
-                    try:
-                        words[i] = rule.apply(words[i])
-                    except WordUnchanged: #if the word didn't change, stop applying
-                        break
+            if applied[i] is not None: #we stopped execution for this word
+                for rule in reversed(rules):
+                    if not rule.flags['ditto'] or applied[i]: #either the rule isn't marked 'ditto', or it is and the last rule ran
+                        if debug:
+                            print('rule =',rule) #for debugging
+                        applied[i] = None if rule.flags['stop'] else True
+                        for j in range(rule.flags['repeat']):
+                            try:
+                                if randint(1,100) <= rule.flags['chance']:
+                                    rule.apply(words[i])
+                                else:
+                                    applied[i] = False
+                            except RuleFailed: #the rule didn't apply, make note of this
+                                applied[i] = False
+                                break
+                            except WordUnchanged: #if the word didn't change, stop applying
+                                break
+                        if applied[i] is None:
+                            break
         for i in reversed(range(len(rules))):
             rules[i].flags['age'] -= 1
             if rules[i].flags['age'] == 0: #if the rule has 'expired', discard it
