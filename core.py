@@ -19,6 +19,7 @@ Functions:
 === Implementation ===
 Utilise new implementation of Word as sequence type
 - investigate reindexing Word
+Do I want Word to be mutable or immutable?
 Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
@@ -192,19 +193,16 @@ class Word():
         if chars is None:
             chars = '#'
         for i in range(len(phones)):
-            if phones[i] in chars:
-                phones[i] = None
-            else:
+            if phones[i] not in chars:
+                start = i
                 break
+        else:
+            return self[-1:0]
         for i in reversed(range(len(phones))):
-            if phones[i] in chars:
-                phones[i] = None
-            else:
+            if phones[i] not in chars:
+                end = i+1
                 break
-        for i in reversed(range(len(phones))):
-            if phones[i] == None:
-                del phones[i]
-        return Word(phones)
+        return self[start:end]
     
     def find(self, sub, start=None, end=None, return_match=False):
         '''Match a sequence using pattern notation to the word.

@@ -181,7 +181,7 @@ class Rule():
             else:
                 tar, indices = [], []
             _matches = []
-            index = 0
+            index = 1
             while True:
                 match, _tar = word.find(tar, index, return_match=True) #find the next place where tar matches
                 if match == -1: #no more matches
