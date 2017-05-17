@@ -72,8 +72,8 @@ class Rule():
         '''Constructor for Rule
         
         Arguments:
-            rule -- the rule as a string
-            cats -- list of categories used to interpret the rule 
+            rule -- the rule as a string (str)
+            cats -- dictionary of categories used to interpret the rule (dict)
         '''
         self.rule = rule
         if ' ' in rule:
@@ -240,8 +240,8 @@ def parse_ruleset(ruleset, cats=None):
     '''Parse a sound change ruleset.
     
     Arguments:
-        ruleset -- the set of rules to be parsed
-        cats    -- the initial categories to be used to parse the rules
+        ruleset -- the set of rules to be parsed (str)
+        cats    -- the initial categories to be used to parse the rules (dict)
     
     Returns a list.
     '''
@@ -277,9 +277,9 @@ def parse_field(field, mode, cats=None):
     '''Parse a field of a sound change rule.
     
     Arguments:
-        field -- the field to be parsed
-        mode  -- which kind of field it is
-        cats  -- list of named categories
+        field -- the field to be parsed (str)
+        mode  -- which kind of field it is (str)
+        cats  -- dictionary of categories (dict)
     
     Returns a list
     '''
@@ -316,7 +316,7 @@ def parse_flags(flags):
     '''Parse the flags of a sound change rule.
     
     Arguments:
-        flags -- the flags to be parsed
+        flags -- the flags to be parsed (str)
         
     Returns a dictionary.
     '''
