@@ -165,8 +165,7 @@ class Rule():
         Arguments:
             word -- the word to which the rule is to be applied (Word)
         
-        Returns a Word
-        
+        Raises RuleFailed if the rule did not apply to the word.
         Raises WordUnchanged if the word was not changed by the rule.
         '''
         phones = word.phones.copy()
