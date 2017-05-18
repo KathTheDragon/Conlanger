@@ -281,16 +281,6 @@ class Word():
                 matchLeft = -1 if env[0] else 0
             matchRight = self.find(env[1], pos+len(tar))
             return matchLeft == matchRight == 0
-    
-    def replace(self, start, tar, rep):
-        rep = rep.copy()
-        for i in reversed(range(len(rep))):
-            if rep[i] == '%': #target copying
-                rep[i:i+1] = tar
-            elif rep[i] == '<': #target reversal/metathesis
-                rep[i:i+1] = reversed(tar)
-        self[start:start+len(tar)] = rep
-        return
 
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
 

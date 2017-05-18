@@ -211,31 +211,25 @@ class Rule():
         '''
         reps = self.reps.copy()
         index, tar, i = match
-        if self.excs: #might need improvement
-            for exc in self.excs: #if any exception matches, try checking else_
-                if word.match_env(exc, index, tar):
-                    if self.else_ is not None:
-                        return self.else_.apply_match(match, word)
-                    return False
-            for env in self.envs: #if any environment matches, return the match
-                if word.match_env(env, index, tar):
-                    rep = reps[i]
-                    if len(rep) == 1 and isinstance(rep[0], Cat):
-                        rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
-                    word.replace(index, tar, rep)
-                    return True
-            return False
-        else:
-            for env in self.envs: #if any environment matches, return the match
-                if word.match_env(env, index, tar):
-                    rep = self.reps[i]
-                    if len(rep) == 1 and isinstance(rep[0], Cat):
-                        rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
-                    word.replace(index, tar, rep)
-                    return True
+        if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
             if self.else_ is not None: #try checking else_
                 return self.else_.apply_match(match, word)
-            return False
+        elif any(word.match_env(env, index, tar) for env in self.envs):
+            #apply the replacement
+            rep = reps[i]
+            if len(rep) == 1 and isinstance(rep[0], Cat):
+                rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
+            for i in reversed(range(len(rep))):
+                if rep[i] == '%': #target copying
+                    rep[i:i+1] = tar
+                elif rep[i] == '<': #target reversal/metathesis
+                    rep[i:i+1] = reversed(tar)
+            word[index:index+len(tar)] = rep
+            return True
+        elif not self.excs:
+            if self.else_ is not None: #try checking else_
+                return self.else_.apply_match(match, word)
+        return False
 
 #== Functions ==#
 def parse_words(words, graphs=None):
