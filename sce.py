@@ -240,7 +240,7 @@ class Rule():
 
 #== Functions ==#
 def parse_words(words, graphs=None):
-    '''Pares a wordlist.
+    '''Parses a wordlist.
     
     Arguments:
         words  -- the words to be parsed (str)
