@@ -231,27 +231,27 @@ class Rule():
         return False
 
 #== Functions ==#
-def parse_words(words, graphs=None):
+def parse_wordset(wordset, graphs=None):
     '''Parses a wordlist.
     
     Arguments:
-        words  -- the words to be parsed (str)
-        graphs -- list of graphemes used to parse the words (list)
+        wordset -- the words to be parsed (str)
+        graphs  -- list of graphemes used to parse the words (list)
     
     Returns a list.
     '''
-    if isinstance(words, str):
-        words = words.splitlines()
+    if isinstance(wordset, str):
+        wordset = wordset.splitlines()
     else:
-        words = words.copy()
-    for i in reversed(range(len(words))):
-        if words[i] == '':
-            del words[i]
-        elif isinstance(words[i], Word):
+        wordset = wordset.copy()
+    for i in reversed(range(len(wordset))):
+        if wordset[i] == '':
+            del wordset[i]
+        elif isinstance(wordset[i], Word):
             continue
         else:
-            words[i] = Word(words[i], graphs)
-    return words
+            wordset[i] = Word(wordset[i], graphs)
+    return wordset
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
@@ -269,7 +269,7 @@ def compile_ruleset(ruleset, cats=None):
     if cats is None:
         cats = {}
     for i in range(len(ruleset)):
-        rule = ruleset[i]
+        rule = ruleset[i].strip()
         if rule == '':
             ruleset[i] = None
         elif isinstance(rule, Rule):
@@ -350,27 +350,27 @@ def parse_flags(flags):
         _flags['age'] = MAX_RUNS
     return _flags
 
-def apply_ruleset(words, ruleset, graphs=None, cats=None, debug=False):
+def apply_ruleset(wordset, ruleset, graphs=None, cats=None, debug=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
-        words   -- the words to which the rules are to be applied (list)
+        wordset -- the words to which the rules are to be applied (list)
         ruleset -- the rules which are to be applied to the words (list)
         cats    -- the initial categories to be used in ruleset compiling (dict)
     
     Returns a list.
     '''
-    words = parse_words(words, graphs)
+    wordset = parse_wordset(wordset, graphs)
     ruleset = compile_ruleset(ruleset, cats)
     if cats is None:
         cats = {}
     rules = [] #we use a list to store rules, since they may be applied multiple times
-    applied = [False]*len(words) #for each word, we store a boolean noting whether a rule got applied or not
+    applied = [False]*len(wordset) #for each word, we store a boolean noting whether a rule got applied or not
     for rule in ruleset:
         rules.append(rule)
         if debug:
-            print('Words =',[str(word) for word in words]) #for debugging
-        for i in range(len(words)):
+            print('Words =',[str(word) for word in wordset]) #for debugging
+        for i in range(len(wordset)):
             if applied[i] is not None: #we stopped execution for this word
                 for rule in reversed(rules):
                     if not rule.flags['ditto'] or applied[i]: #either the rule isn't marked 'ditto', or it is and the last rule ran
@@ -380,7 +380,7 @@ def apply_ruleset(words, ruleset, graphs=None, cats=None, debug=False):
                         for j in range(rule.flags['repeat']):
                             try:
                                 if randint(1,100) <= rule.flags['chance']:
-                                    rule.apply(words[i])
+                                    rule.apply(wordset[i])
                                 else:
                                     applied[i] = False
                             except RuleFailed: #the rule didn't apply, make note of this
@@ -394,5 +394,5 @@ def apply_ruleset(words, ruleset, graphs=None, cats=None, debug=False):
             rules[i].flags['age'] -= 1
             if rules[i].flags['age'] == 0: #if the rule has 'expired', discard it
                 del rules[i]
-    return words
+    return wordset
 
