@@ -1,6 +1,7 @@
 '''Apply sound changes to a lexicon
 
 Exceptions:
+    RuleFailed    -- exception to mark that a rule failed
     WordUnchanged -- exception to break out of repeated rule application
 
 Classes:
@@ -30,6 +31,7 @@ Implement ^ for range indices
 Implement extended category substitution
 Implement additional logic options for environments
 Implement repetition shorthand
+Is it possible to implement a>b>c as notation for a chain shift?
 
 === Style ===
 Write docstrings
@@ -64,7 +66,8 @@ class Rule():
         flags -- flags for altering execution (dict)
     
     Methods:
-        apply       -- apply the rule to a word 
+        apply       -- apply the rule to a word
+        apply_match -- apply a single match to a word
     '''
     
     rule = ''

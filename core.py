@@ -91,7 +91,7 @@ class Word():
     '''Represents a word as a list of graphemes.
     
     Instance variables:
-        sep        -- a character used to disambiguate polygraphs from sequences (chr)
+        separator  -- a character used to disambiguate polygraphs from sequences (chr)
         polygraphs -- a list of multi-letter graphemes (list)
         phones     -- a list of the graphemes in the word (list)
         syllables  -- a list of tuples representing syllables (list)
@@ -111,38 +111,35 @@ class Word():
         '''
         if graphs is None:
             graphs = ["'"]
-        self.sep = graphs[0]
+        self.separator = graphs[0]
         self.polygraphs = [g for g in graphs if len(g)>1]
         if lexeme is None:
             self.phones = []
         elif isinstance(lexeme, list):
             self.phones = lexeme
         else:
-            self.phones = parse_word(f' {lexeme} ', self.sep, self.polygraphs)
+            self.phones = parse_word(f' {lexeme} ', self.separator, self.polygraphs)
         self.syllables = syllables #do a bit of sanity checking here
     
     def __repr__(self):
         return f"Word('{self!s}')"
     
     def __str__(self):
-        word = curr = ''
-        for graph in self.phones:
-            curr += graph
-            for poly in self.polygraphs:
-                if graph in poly and graph != poly:
-                    break
+        word = test = ''
+        for graph in self:
+            if not any(graph in poly for poly in self.polygraphs):
+                test = '' #can't ever be ambiguous
+            elif not test:
+                test = graph #nothing earlier to be ambiguous with
             else:
-                curr = ''
-            for poly in self.polygraphs:
-                if curr in poly:
-                    if curr == poly:
-                        word += self.sep
-                        curr = graph
-                    break
-            else:
-                curr = curr[1:]
+                test += graph
+                if any(test == poly or poly in test for poly in self.polygraphs):
+                    word += self.separator #ambiguous, so add the separator
+                    test = graph
+                elif not any(test in poly for poly in self.polygraphs):
+                    test = test[1:] #could still be ambiguous with something later
             word += graph
-        return word.strip(self.sep+'#').replace('#',' ')
+        return word.strip(self.separator+'#').replace('#',' ')
     
     def __eq__(self, other):
         return isinstance(other, Word) and self.phones == other.phones
@@ -166,10 +163,8 @@ class Word():
         return iter(self.phones)
     
     def __contains__(self, item):
-        if isinstance(item, list):
+        if isinstance(item, (list, Word)):
             return self.find(item) != -1
-        elif isinstance(item, Word):
-            return self.find(item.phones) != -1
         else:
             return item in self.phones
     
@@ -183,7 +178,7 @@ class Word():
         return Word(self.phones * other)
     
     def copy(self):
-        return Word(self.phones, syllables=self.syllables)
+        return Word(self.phones, self.graphs, self.syllables)
     
     def reverse(self):
         self.phones.reverse()
@@ -192,13 +187,13 @@ class Word():
         if chars is None:
             chars = '#'
         for i in range(len(self)):
-            if self.phones[i] not in chars:
+            if self[i] not in chars:
                 start = i
                 break
         else:
             return self[-1:0]
         for i in reversed(range(len(self))):
-            if self.phones[i] not in chars:
+            if self[i] not in chars:
                 end = i+1
                 break
         self.phones = self.phones[start:end]
@@ -317,12 +312,12 @@ def parse_syms(syms, cats=None):
             syms[i:i+1] = parse_word(syms[i])
     return syms
 
-def parse_word(word, sep="'", polygraphs=[]):
+def parse_word(word, separator="'", polygraphs=[]):
     '''Parse a string of graphemes.
     
     Arguments:
         word       -- the word to be parsed (str)
-        sep        -- disambiguator character (str)
+        separator  -- disambiguator character (str)
         polygraphs -- list of polygraphs (list)
     
     Returns a list.
@@ -330,13 +325,13 @@ def parse_word(word, sep="'", polygraphs=[]):
     #black magic
     test = ''
     graphemes = []
-    for char in '#'.join(f'.{word}.'.split()).strip('.')+sep: #convert all whitespace to a single #
+    for char in '#'.join(f'.{word}.'.split()).strip('.')+separator: #convert all whitespace to a single #
         test += char
         while len(test) > 1 and not any(g.startswith(test) for g in polygraphs): #while test isn't a single character and doesn't begin any polygraph
             for i in reversed(range(1,len(test)+1)): #from i=len(test) to i=1
                 if i == 1 or test[:i] in polygraphs: #does test begin with a valid graph? Single characters are always valid
                     graphemes.append(test[:i]) #add this valid graph to the output
-                    test = test[i:].lstrip(sep) #remove the graph from test, and remove leading instances of sep
+                    test = test[i:].lstrip(separator) #remove the graph from test, and remove leading instances of separator
                     break
     return graphemes
 
