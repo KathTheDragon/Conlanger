@@ -209,14 +209,13 @@ class Rule():
         
         Returns a bool.
         '''
-        reps = self.reps.copy()
         index, tar, i = match
         if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
             if self.else_ is not None: #try checking else_
                 return self.else_.apply_match(match, word)
         elif any(word.match_env(env, index, tar) for env in self.envs):
             #apply the replacement
-            rep = reps[i]
+            rep = self.reps[i].copy()
             if len(rep) == 1 and isinstance(rep[0], Cat):
                 rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
             for i in reversed(range(len(rep))):
