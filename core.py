@@ -19,7 +19,7 @@ Functions:
 === Implementation ===
 Utilise new implementation of Word as sequence type
 - investigate reindexing Word
-Do I want Word to be mutable or immutable?
+Consider how to subclass Word from list
 Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
@@ -43,11 +43,9 @@ class FormatError(LangException):
 
 #== Classes ==#
 class Cat(list):
-    '''Represents a category of graphemes.
+    '''Represents a category of graphemes.'''
     
-    Instance variables:
-        values -- the values in the category (list)
-    '''
+    __slots__ = []
     
     def __init__(self, values=None, cats=None):
         '''Constructor for Cat.
@@ -80,27 +78,29 @@ class Cat(list):
         return ', '.join(self)
     
     def __and__(self, cat):
-        values = [value for value in self if value in cat]
-        return Cat(values)
+        return Cat(value for value in self if value in cat)
+    
+    def __add__(self, cat):
+        return Cat(list.__add__(self, cat))
     
     def __sub__(self, cat):
-        values = [value for value in self if value not in cat]
-        return Cat(values)
+        return Cat(value for value in self if value not in cat)
 
-class Word():
+class Word(list):
     '''Represents a word as a list of graphemes.
     
     Instance variables:
-        separator  -- a character used to disambiguate polygraphs from sequences (chr)
-        polygraphs -- a list of multi-letter graphemes (list)
-        phones     -- a list of the graphemes in the word (list)
-        syllables  -- a list of tuples representing syllables (list)
+        graphs    -- a list of graphemes (list)
+        syllables -- a list of tuples representing syllables (list)
     
     Methods:
         find      -- match a list using pattern notation to the word
         match_env -- match a sound change environment to the word
         strip     -- remove leading and trailing graphemes
     '''
+    
+    __slots__ = ['graphs', 'syllables']
+    
     def __init__(self, lexeme=None, graphs=None, syllables=None):
         '''Constructor for Word
         
@@ -111,14 +111,12 @@ class Word():
         '''
         if graphs is None:
             graphs = ["'"]
-        self.separator = graphs[0]
-        self.polygraphs = [g for g in graphs if len(g)>1]
+        self.graphs = graphs
         if lexeme is None:
-            self.phones = []
-        elif isinstance(lexeme, list):
-            self.phones = lexeme
-        else:
-            self.phones = parse_word(f' {lexeme} ', self.separator, self.polygraphs)
+            lexeme = []
+        elif isinstance(lexeme, str):
+            lexeme = parse_word(f' {lexeme} ', self.graphs)
+        list.__init__(self, lexeme)
         self.syllables = syllables #do a bit of sanity checking here
     
     def __repr__(self):
@@ -126,62 +124,40 @@ class Word():
     
     def __str__(self):
         word = test = ''
+        separator = self.graphs[0]
+        polygraphs = (graph for graph in self.graphs if len(graph) > 1)
         for graph in self:
-            if not any(graph in poly for poly in self.polygraphs):
+            if not any(graph in poly for poly in polygraphs):
                 test = '' #can't ever be ambiguous
             elif not test:
                 test = graph #nothing earlier to be ambiguous with
             else:
                 test += graph
-                if any(test == poly or poly in test for poly in self.polygraphs):
-                    word += self.separator #ambiguous, so add the separator
+                if any(test == poly or poly in test for poly in polygraphs):
+                    word += separator #ambiguous, so add the separator
                     test = graph
-                elif not any(test in poly for poly in self.polygraphs):
+                elif not any(test in poly for poly in polygraphs):
                     test = test[1:] #could still be ambiguous with something later
             word += graph
-        return word.strip(self.separator+'#').replace('#',' ')
-    
-    def __eq__(self, other):
-        return isinstance(other, Word) and self.phones == other.phones
-    
-    def __len__(self):
-        return len(self.phones)
-    
-    def __getitem__(self, key):
-        if isinstance(key, slice):
-            return Word(self.phones[key])
-        else:
-            return self.phones[key]
-    
-    def __setitem__(self, key, value):
-        self.phones[key] = value
-    
-    def __delitem__(self, key):
-        del self.phones[key]
-    
-    def __iter__(self):
-        return iter(self.phones)
+        return word.strip(separator+'#').replace('#',' ')
     
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
         else:
-            return item in self.phones
+            return list.__contains__(self, item)
     
     def __add__(self, other):
-        return Word(self.phones + other.phones)
+        return Word(list.__add__(self, other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
     
     def __mul__(self, other):
-        return Word(self.phones * other)
+        return Word(list.__mul__(self, other), self.graphs, self.syllables * other)
     
     def __rmul__(self, other):
-        return Word(self.phones * other)
+        return Word(list.__rmul__(self, other), self.graphs, self.syllables * other)
     
     def copy(self):
-        return Word(self.phones, self.graphs, self.syllables)
-    
-    def reverse(self):
-        self.phones.reverse()
+        return Word(self, self.graphs, self.syllables)
     
     def strip(self, chars=None):
         if chars is None:
@@ -191,12 +167,13 @@ class Word():
                 start = i
                 break
         else:
-            return self[-1:0]
+            self[:] = []
+            return
         for i in reversed(range(len(self))):
             if self[i] not in chars:
                 end = i+1
                 break
-        self.phones = self.phones[start:end]
+        self[:] = self[start:end]
     
     def find(self, sub, start=None, end=None, return_match=False):
         '''Match a sequence using pattern notation to the word.
@@ -312,7 +289,7 @@ def parse_syms(syms, cats=None):
             syms[i:i+1] = parse_word(syms[i])
     return syms
 
-def parse_word(word, separator="'", polygraphs=[]):
+def parse_word(word, graphs=None):
     '''Parse a string of graphemes.
     
     Arguments:
@@ -324,6 +301,10 @@ def parse_word(word, separator="'", polygraphs=[]):
     '''
     #black magic
     test = ''
+    if graphs is None:
+        graphs = ["'"]
+    separator = graphs[0]
+    polygraphs = (graph for graph in graphs if len(graph) > 1)
     graphemes = []
     for char in '#'.join(f'.{word}.'.split()).strip('.')+separator: #convert all whitespace to a single #
         test += char

@@ -18,23 +18,20 @@ Functions:
 
 === Implementation ===
 Check that tar still matches immediately before replacement (difficult)
-Check if a rule is able to run infinitely and raise an exception if it can
-- (tar in rep and rule['repeat'] < 1)
 Move compiling code to own functions
 Is there a better name for Rule.else_?
 
 === Features ===
 Implement $ and syllables
 Implement " for copying previous segment
-Implement * in the target, with variants **, *?, **?
-Implement ^ for range indices
-Implement extended category substitution
+Implement * in the target, with variants **, *?, **? (important)
+Implement ^ for range indices (important)
+Implement extended category substitution (important)
 Implement additional logic options for environments
 Implement repetition shorthand
 Is it possible to implement a>b>c as notation for a chain shift?
 
 === Style ===
-Write docstrings
 Consider where to raise/handle exceptions
 '''
 
@@ -70,7 +67,7 @@ class Rule():
         apply_match -- apply a single match to a word
     '''
     
-    rule = ''
+    __slots__ = ['rule', 'tars', 'reps', 'envs', 'excs', 'else_', 'flags']
     
     def __init__(self, rule='', cats=None): #format is tars>reps/envs!excs flag; envs, excs, and flag are all optional
         '''Constructor for Rule
@@ -171,7 +168,7 @@ class Rule():
         Raises RuleFailed if the rule did not apply to the word.
         Raises WordUnchanged if the word was not changed by the rule.
         '''
-        phones = word.phones.copy()
+        phones = list(word)
         if self.flags['ltr']:
             word.reverse()
         matches = []
@@ -200,7 +197,7 @@ class Rule():
             word.reverse()
         if not any(results):
             raise RuleFailed
-        if word.phones == phones:
+        if phones == list(word):
             raise WordUnchanged
     
     def apply_match(self, match, word):
