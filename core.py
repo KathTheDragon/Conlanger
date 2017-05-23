@@ -17,7 +17,9 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Investigate reindexing Word
+Utilise new implementation of Word as sequence type
+- investigate reindexing Word
+Consider how to subclass Word from list
 Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
@@ -144,11 +146,6 @@ class Word(list):
             return self.find(item) != -1
         else:
             return list.__contains__(self, item)
-    
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-        else:
-            return list.__getitem__(self, item)
     
     def __add__(self, other):
         return Word(list.__add__(self, other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
