@@ -23,7 +23,7 @@ Consider where to raise/handle exceptions
 from core import Cat, Config, parse_syms, split
 import gen
 
-#== Classes ==#
+# == Classes == #
 class Language():
     '''Class for representing a single language.
     
@@ -57,28 +57,28 @@ class Language():
             self.cats = {}
         else:
             self.cats = cats
-        #need to keep this but not sure where exactly it's being moved to
+        # Need to keep this but not sure where exactly it's being moved to
         # cats = cats.replace('|',' ').split()
         # for cat in cats:
             # name, vals = cat.split('=')
             # vals = vals.replace(',',' ').split()
-            # if not vals: #this would yeild an empty cat
+            # if not vals:  # This would yield an empty cat
                 # continue
             # for i in range(len(vals)):
-                # if '[' in vals[i]: #this is another category
+                # if '[' in vals[i]:  # This is another category
                     # vals[i] = self.cats[vals[i][1:-1]]
             # self.cats[name] = Cat(vals)
-        # if 'graphs' not in self.cats or not self.cats['graphs']: #category 'graphs' must exist and contain at least one character
+        # if 'graphs' not in self.cats or not self.cats['graphs']:  # Category 'graphs' must exist and contain at least one character
             # self.cats['graphs'] = Cat("'")
-        # for cat in self.cats.keys(): #discard blank categories
+        # for cat in self.cats.keys():  # Discard blank categories
             # if not self.cats[cat]:
                 # del self.cats[cat]
         if wordConfig is None:
-            self.wordConfig = Config([],range(0),[],0,0)
+            self.wordConfig = Config([], range(0), [], 0, 0)
         else:
             self.wordConfig = wordConfig
         if rootConfig is None:
-            self.rootConfig = Config([],range(0),[],0,0)
+            self.rootConfig = Config([], range(0), [], 0, 0)
         else:
             self.rootConfig = rootConfig
         self.patternFreq = patternFreq
@@ -105,7 +105,7 @@ class Language():
         
         Returns a list
         '''
-        if num == 0: #generate every possible word, unimplemented
+        if num == 0:  # Generate every possible word, unimplemented
             return []
         results = []
         for i in range(num):
@@ -120,14 +120,14 @@ class Language():
         
         Returns a list
         '''
-        if num == 0: #generate every possible word, unimplemented
+        if num == 0:  # Generate every possible word, unimplemented
             return []
         results = []
         for i in range(num):
             results.append(gen.gen_root(self))
         return results
 
-#== Functions ==#
+# == Functions == #
 def load_lang(name):
     '''Loads language data from file.
     

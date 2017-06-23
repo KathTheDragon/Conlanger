@@ -39,17 +39,17 @@ from math import ceil
 from random import randint
 from core import LangException, Cat, Word, parse_syms, split
 
-#== Constants ==#
-MAX_RUNS = 10**3 #maximum number of times a rule may be repeated
+# == Constants == #
+MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
 
-#== Exceptions ==#
+# == Exceptions == #
 class RuleFailed(LangException):
     '''Used to indicate that the rule failed to be applied.'''
 
 class WordUnchanged(LangException):
     '''Used to indicate that the word was not changed by the rule.'''
 
-#== Classes ==#
+# == Classes == #
 class Rule():
     '''Class for representing a sound change rule.
     
@@ -69,7 +69,7 @@ class Rule():
     
     __slots__ = ['rule', 'tars', 'reps', 'envs', 'excs', 'else_', 'flags']
     
-    def __init__(self, rule='', cats=None): #format is tars>reps/envs!excs flag; envs, excs, and flag are all optional
+    def __init__(self, rule='', cats=None):  # Format is tars>reps/envs!excs flag; envs, excs, and flag are all optional
         '''Constructor for Rule
         
         Arguments:
@@ -87,10 +87,10 @@ class Rule():
             rule = rule[1:]
         rule = rule.replace('>', ' >').replace('/', ' /').replace('!', ' !').split(' ')
         tars = rule.pop(0)
-        #We want to extract just the first iteration of (reps, envs, excs) and store everything else in else_
-        #To do this, we observe that if we fill in missing fields once we reach a later field, then if we hit
-        #a repeat (by seeing that the field variable is not None) we are in the second iteration. If there is
-        #no second iteration, else_ will be None.
+        # We want to extract just the first iteration of (reps, envs, excs) and store everything else in else_
+        # To do this, we observe that if we fill in missing fields once we reach a later field, then if we hit
+        # a repeat (by seeing that the field variable is not None) we are in the second iteration. If there is
+        # no second iteration, else_ will be None.
         reps = envs = excs = else_ = None
         for i in range(len(rule)):
             if rule[i][0] == '>' and reps is None:
@@ -109,7 +109,7 @@ class Rule():
                     reps = ''
                 continue
             else_ = rule[i:]
-            else_.insert(0,tars)
+            else_.insert(0, tars)
         if reps is None:
             reps = ''
         if envs is None:
@@ -174,7 +174,7 @@ class Rule():
         matches = []
         tars = self.tars
         if not tars:
-            tars = [([],[])]
+            tars = [([], [])]
         for i in range(len(tars)):
             if tars[i]:
                 tar, indices = tars[i]
@@ -183,8 +183,8 @@ class Rule():
             _matches = []
             index = 1
             while True:
-                match, _tar = word.find(tar, index, return_match=True) #find the next place where tar matches
-                if match == -1: #no more matches
+                match, _tar = word.find(tar, index, return_match=True)  # Find the next place where tar matches
+                if match == -1:  # No more matches
                     break
                 index += match
                 _matches.append((index, _tar, i))
@@ -211,26 +211,26 @@ class Rule():
         '''
         index, tar, i = match
         if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
-            if self.else_ is not None: #try checking else_
+            if self.else_ is not None:  # Try checking else_
                 return self.else_.apply_match(match, word)
         elif any(word.match_env(env, index, tar) for env in self.envs):
-            #apply the replacement
+            # Apply the replacement
             rep = self.reps[i].copy()
             if len(rep) == 1 and isinstance(rep[0], Cat):
                 rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
             for i in reversed(range(len(rep))):
-                if rep[i] == '%': #target copying
+                if rep[i] == '%':  # Target copying
                     rep[i:i+1] = tar
-                elif rep[i] == '<': #target reversal/metathesis
+                elif rep[i] == '<':  # Target reversal/metathesis
                     rep[i:i+1] = reversed(tar)
             word[index:index+len(tar)] = rep
             return True
         elif not self.excs:
-            if self.else_ is not None: #try checking else_
+            if self.else_ is not None:  # Try checking else_
                 return self.else_.apply_match(match, word)
         return False
 
-#== Functions ==#
+# == Functions == #
 def parse_wordset(wordset, graphs=None):
     '''Parses a wordlist.
     
@@ -274,14 +274,14 @@ def compile_ruleset(ruleset, cats=None):
             ruleset[i] = None
         elif isinstance(rule, Rule):
             continue
-        elif '>' in rule or rule[0] in '+-': #rule is a sound change
+        elif '>' in rule or rule[0] in '+-':  # Rule is a sound change
             ruleset[i] = Rule(rule, cats)
-        else: #rule is a cat definition
+        else:  # Rule is a cat definition
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
             name, vals = rule.split(op)
             exec(f'cats[name] {op} Cat(vals)')
-            for cat in list(cats): #discard blank categories
+            for cat in list(cats):  # Discard blank categories
                 if not cats[cat]:
                     del cats[cat]
             ruleset[i] = None
@@ -305,8 +305,8 @@ def parse_field(field, mode, cats=None):
     _field = []
     if mode == 'envs':
         for env in split(field, '|', minimal=True):
-            if '~' in env: #~X is equivalent to X_,_X
-                _field += Rule.parse_field('{0}_|_{0}'.format(envs[1:]), 'envs', cats)
+            if '~' in env:  # ~X is equivalent to X_,_X
+                _field += parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats)
             elif '_' in env:
                 env = env.split('_')
                 env = [parse_syms(env[0], cats)[::-1], parse_syms(env[1], cats)]
@@ -314,7 +314,7 @@ def parse_field(field, mode, cats=None):
                 env = [parse_syms(env, cats)]
             _field.append(env)
     else:
-        for tar in split(field, ',', nesting=(0,'([{','}])'), minimal=True):
+        for tar in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
             if mode == 'tars':
                 if '@' in tar:
                     tar, index = tar.split('@')
@@ -337,7 +337,7 @@ def parse_flags(flags):
         
     Returns a dictionary.
     '''
-    _flags = {'ignore':0, 'ditto':0, 'stop':0, 'ltr':0, 'repeat':1, 'age':1, 'chance':100} #default values
+    _flags = dict(ignore=0, ditto=0, stop=0, ltr=0, repeat=1, age=1, chance=100)  # Default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
@@ -362,37 +362,36 @@ def apply_ruleset(wordset, ruleset, graphs=None, cats=None, debug=False):
     '''
     wordset = parse_wordset(wordset, graphs)
     ruleset = compile_ruleset(ruleset, cats)
-    if cats is None:
-        cats = {}
-    rules = [] #we use a list to store rules, since they may be applied multiple times
-    applied = [False]*len(wordset) #for each word, we store a boolean noting whether a rule got applied or not
+    rules = []  # We use a list to store rules, since they may be applied multiple times
+    applied = [False]*len(wordset)  # For each word, we store a boolean noting whether a rule got applied or not
     for rule in ruleset:
         rules.append(rule)
         if debug:
-            print('Words =',[str(word) for word in wordset]) #for debugging
+            print('Words =', [str(word) for word in wordset])  # For debugging
         for i in range(len(wordset)):
-            if applied[i] is not None: #we stopped execution for this word
+            if applied[i] is not None:  # We stopped execution for this word
                 for rule in reversed(rules):
-                    if not rule.flags['ditto'] or applied[i]: #either the rule isn't marked 'ditto', or it is and the last rule ran
+                    # Either the rule isn't marked 'ditto', or it is and the last rule ran
+                    if not rule.flags['ditto'] or applied[i]:
                         if debug:
-                            print('rule =',rule) #for debugging
+                            print('rule =', rule)  # For debugging
                         applied[i] = None if rule.flags['stop'] else True
                         for j in range(rule.flags['repeat']):
                             try:
-                                if randint(1,100) <= rule.flags['chance']:
+                                if randint(1, 100) <= rule.flags['chance']:
                                     rule.apply(wordset[i])
                                 else:
                                     applied[i] = False
-                            except RuleFailed: #the rule didn't apply, make note of this
+                            except RuleFailed:  # The rule didn't apply, make note of this
                                 applied[i] = False
                                 break
-                            except WordUnchanged: #if the word didn't change, stop applying
+                            except WordUnchanged:  # If the word didn't change, stop applying
                                 break
                         if applied[i] is None:
                             break
         for i in reversed(range(len(rules))):
             rules[i].flags['age'] -= 1
-            if rules[i].flags['age'] == 0: #if the rule has 'expired', discard it
+            if rules[i].flags['age'] == 0:  # If the rule has 'expired', discard it
                 del rules[i]
     return wordset
 

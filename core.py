@@ -32,14 +32,14 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 from string import whitespace
 
-#== Exceptions ==#
+# == Exceptions == #
 class LangException(Exception):
     '''Base class for exceptions in this package'''
 
 class FormatError(LangException):
     '''Exception raised for errors in formatting objects.'''
 
-#== Classes ==#
+# == Classes == #
 class Cat(list):
     '''Represents a category of graphemes.'''
     
@@ -55,11 +55,11 @@ class Cat(list):
         _values = []
         if values is None:
             values = []
-        elif isinstance(values, str): #we want an iteratible with each value as an element
+        elif isinstance(values, str):  # We want an iterable with each value as an element
             values = split(values, ',', minimal=True)
         for value in values:
-            if isinstance(value, Cat): #another category
-                _values.extend(value.values)
+            if isinstance(value, Cat):  # Another category
+                _values.extend(value)
             elif '[' in value:
                 if cats is not None and value.strip('[]') in cats:
                     _values.extend(cats[value.strip('[]')])
@@ -115,7 +115,7 @@ class Word(list):
         elif isinstance(lexeme, str):
             lexeme = parse_word(f' {lexeme} ', self.graphs)
         list.__init__(self, lexeme)
-        self.syllables = syllables #do a bit of sanity checking here
+        self.syllables = syllables  # Do a bit of sanity checking here
     
     def __repr__(self):
         return f"Word('{self!s}')"
@@ -126,16 +126,16 @@ class Word(list):
         polygraphs = (graph for graph in self.graphs if len(graph) > 1)
         for graph in self:
             if not any(graph in poly for poly in polygraphs):
-                test = '' #can't ever be ambiguous
+                test = ''  # Can't ever be ambiguous
             elif not test:
-                test = graph #nothing earlier to be ambiguous with
+                test = graph  # Nothing earlier to be ambiguous with
             else:
                 test += graph
                 if any(test == poly or poly in test for poly in polygraphs):
-                    word += separator #ambiguous, so add the separator
+                    word += separator  # Ambiguous, so add the separator
                     test = graph
                 elif not any(test in poly for poly in polygraphs):
-                    test = test[1:] #could still be ambiguous with something later
+                    test = test[1:]  # Could still be ambiguous with something later
             word += graph
         return word.strip(separator+'#').replace('#',' ')
     
@@ -189,6 +189,7 @@ class Word(list):
         
         Returns an int
         '''
+        # Interpret start and end according to slice notation
         if start is None:
             start = 0
         elif start < 0:
@@ -199,30 +200,30 @@ class Word(list):
             end += len(self)
         sub = sub.copy()
         if isinstance(sub, Word):
-            sub.strip() #we want to strip out the leading and trailing '#'s so that this works like finding substrings
+            sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
         for i in range(0, end-start):
-            j = i + start #position in the word
+            j = i + start  # Position in the word
             for k, sym in enumerate(sub):
-                if j >= end: #we've reached the end of the slice, so the find fails
+                if j >= end:  # We've reached the end of the slice, so the find fails
                     return (-1, []) if return_match else -1
-                elif isinstance(sym, tuple): #optional sequence
+                elif isinstance(sym, tuple):  # Optional sequence
                     index = self.find(list(sym)+sub[k+1:], j, end, return_match)
                     if return_match:
                         index, match = index
-                    if index == 0: #try with the optional sequence
+                    if index == 0:  # Try with the optional sequence
                         return (i, self[i+start:j]+match) if return_match else i
-                    j -= 1 #if this fails, we jump back to where we were
-                elif isinstance(sym, Cat): #category
-                    if not self[j] in sym: #this may change - definitely if categories are allowed to contain sequences
+                    j -= 1  # If this fails, we jump back to where we were
+                elif isinstance(sym, Cat):  # Category
+                    if not self[j] in sym:  # This may change if categories are allowed to contain sequences
                         break
-                elif sym == '*': #wildcard
+                elif sym == '*':  # Wildcard
                     index = self.find(sub[k+1:],j, end, return_match)
                     if return_match:
                         index, match = index
-                    if index != -1: #only fails if the rest of the sequence is nowhere present
+                    if index != -1:  # Only fails if the rest of the sequence is nowhere present
                         return (i, self[i+start:index+j]+match) if return_match else i
                     break
-                elif self[j] != sym: #grapheme
+                elif self[j] != sym:  # Grapheme
                     break
                 j += 1
             else:
@@ -230,7 +231,7 @@ class Word(list):
         else:
             return (-1, []) if return_match else -1
     
-    def match_env(self, env, pos=0, tar=None): #test if the env matches the word
+    def match_env(self, env, pos=0, tar=None):  # Test if the env matches the word
         '''Match a sound change environment to the word.
         
         Arguments:
@@ -253,14 +254,14 @@ class Word(list):
         else:
             if pos:
                 matchLeft = self[::-1].find(env[0],-pos)
-            else: #at the left edge, which can only be matched by a null env
+            else:  # At the left edge, which can only be matched by a null env
                 matchLeft = -1 if env[0] else 0
             matchRight = self.find(env[1], pos+len(tar))
             return matchLeft == matchRight == 0
 
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
 
-#== Functions ==#
+# == Functions == #
 def parse_syms(syms, cats=None):
     '''Parse a string using pattern notation.
     
@@ -274,22 +275,22 @@ def parse_syms(syms, cats=None):
         cats = {}
     for char in '([{}])':
         syms = syms.replace(char, f' {char} ')
-    syms = split(syms, ' ', nesting=(0, '([{','}])'), minimal=True)
+    syms = split(syms, ' ', nesting=(0, '([{', '}])'), minimal=True)
     for i in reversed(range(len(syms))):
-        syms[i] = syms[i].replace(' ','')
+        syms[i] = syms[i].replace(' ', '')
         if not syms[i]:
             del syms[i]
-        elif syms[i][0] == '(': #optional - parse to tuple
+        elif syms[i][0] == '(':  # Optional - parse to tuple
             syms[i] = tuple(parse_syms(syms[i].strip('()'), cats))
-        elif syms[i][0] == '[': #category - parse to Cat
+        elif syms[i][0] == '[':  # Category - parse to Cat
             syms[i] = syms[i].strip('[]')
-            if ',' in syms[i]: #nonce cat
+            if ',' in syms[i]:  # Nonce cat
                 syms[i] = Cat(syms[i])
-            else: #named cat
+            else:  # Named cat
                 syms[i] = cats[syms[i]]
-        elif syms[i][0] == '{': #unimplemented - delete
+        elif syms[i][0] == '{':  # Unimplemented - delete
             del syms[i]
-        else: #text - parse as word
+        else:  # Text - parse as word
             syms[i:i+1] = parse_word(syms[i])
     return syms
 
@@ -298,25 +299,31 @@ def parse_word(word, graphs=None):
     
     Arguments:
         word       -- the word to be parsed (str)
-        separator  -- disambiguator character (str)
+        separator  -- disambiguation character (str)
         polygraphs -- list of polygraphs (list)
     
     Returns a list.
     '''
-    #black magic
+    # Black magic
+    # While test isn't a single character and doesn't begin any polygraph
+    #     From i=len(test) to i=1
+    #         Does test begin with a valid graph? Single characters are always valid
+    #             Add this valid graph to the output
+    #             Remove the graph from test, and remove leading instances of separator
+    #     End
     test = ''
     if graphs is None:
         graphs = ["'"]
     separator = graphs[0]
     polygraphs = (graph for graph in graphs if len(graph) > 1)
     graphemes = []
-    for char in '#'.join(f'.{word}.'.split()).strip('.')+separator: #convert all whitespace to a single #
+    for char in '#'.join(f'.{word}.'.split()).strip('.')+separator:  # Convert all whitespace to a single #
         test += char
-        while len(test) > 1 and not any(g.startswith(test) for g in polygraphs): #while test isn't a single character and doesn't begin any polygraph
-            for i in reversed(range(1,len(test)+1)): #from i=len(test) to i=1
-                if i == 1 or test[:i] in polygraphs: #does test begin with a valid graph? Single characters are always valid
-                    graphemes.append(test[:i]) #add this valid graph to the output
-                    test = test[i:].lstrip(separator) #remove the graph from test, and remove leading instances of separator
+        while len(test) > 1 and not any(g.startswith(test) for g in polygraphs):
+            for i in reversed(range(1, len(test)+1)):
+                if i == 1 or test[:i] in polygraphs:
+                    graphemes.append(test[:i])
+                    test = test[i:].lstrip(separator)
                     break
     return graphemes
 
