@@ -202,9 +202,9 @@ class Word(list):
         if isinstance(sub, Word):
             sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
         for pos in range(start, end):
-            match, length = self.match_pattern(sub, pos)
+            match, length = self.match_pattern(sub, pos, end)
             if match:
-                return (pos-start, self[pos:pos+length]) if return_match else pos
+                return (pos-start, self[pos:pos+length]) if return_match else pos-start
         else:
             return (-1, []) if return_match else -1
     
@@ -222,7 +222,7 @@ class Word(list):
         '''
         stack = []  # This records the positions of matched optionals and wildcards, if we need to jump back
         pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
-        ix = 0  # This keepts track of the position in the sequence, as it isn't necessarily monotonic
+        ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
         while ix < len(seq):
             matched = True
             if pos >= end:  # We've reached the end of the slice, so the match fails
@@ -275,11 +275,11 @@ class Word(list):
             return env[0] in self
         else:
             if pos:
-                matchleft = self[::-1].find(env[0],-pos)
+                matchleft = self[::-1].match_pattern(env[0], len(self)-pos, len(self))[0]
             else:  # At the left edge, which can only be matched by a null env
                 matchleft = -1 if env[0] else 0
-            matchright = self.find(env[1], pos+len(tar))
-            return matchleft == matchright == 0
+            matchright = self.match_pattern(env[1], pos+len(tar), len(self))[0]
+            return matchleft and matchright
 
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
 
