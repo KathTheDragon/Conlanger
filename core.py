@@ -201,36 +201,58 @@ class Word(list):
         sub = sub.copy()
         if isinstance(sub, Word):
             sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
-        for i in range(0, end-start):
-            j = i + start  # Position in the word
-            for k, sym in enumerate(sub):
-                if j >= end:  # We've reached the end of the slice, so the find fails
-                    return (-1, []) if return_match else -1
-                elif isinstance(sym, tuple):  # Optional sequence
-                    index = self.find(list(sym)+sub[k+1:], j, end, return_match)
-                    if return_match:
-                        index, match = index
-                    if index == 0:  # Try with the optional sequence
-                        return (i, self[i+start:j]+match) if return_match else i
-                    j -= 1  # If this fails, we jump back to where we were
-                elif isinstance(sym, Cat):  # Category
-                    if not self[j] in sym:  # This may change if categories are allowed to contain sequences
-                        break
-                elif sym == '*':  # Wildcard
-                    index = self.find(sub[k+1:],j, end, return_match)
-                    if return_match:
-                        index, match = index
-                    if index != -1:  # Only fails if the rest of the sequence is nowhere present
-                        return (i, self[i+start:index+j]+match) if return_match else i
-                    break
-                elif self[j] != sym:  # Grapheme
-                    break
-                j += 1
-            else:
-                return (i, self[i+start:j]) if return_match else i
+        for pos in range(start, end):
+            match, length = self.match_pattern(sub, pos)
+            if match:
+                return (pos-start, self[pos:pos+length]) if return_match else pos
         else:
             return (-1, []) if return_match else -1
     
+    def match_pattern(self, seq, start, end):
+        '''Match a pattern sequence to the word.
+        
+        Return if the sequence matches the start of the given slice of the word, and how much of the word was matched.
+        
+        Arguments:
+            seq   -- the sequence being matched
+            start -- the index to begin matching from
+            end   -- the index to match until
+        
+        Returns a tuple of a bool and an int.
+        '''
+        stack = []  # This records the positions of matched optionals and wildcards, if we need to jump back
+        pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
+        ix = 0  # This keepts track of the position in the sequence, as it isn't necessarily monotonic
+        while ix < len(seq):
+            matched = True
+            if pos >= end:  # We've reached the end of the slice, so the match fails
+                matched = False
+            elif isinstance(seq[ix], tuple):  # Optional sequence
+                match, length = self.match_pattern(seq[ix], pos, end)
+                if match:  # If the optional can be matched, match it
+                    stack.append((pos, ix+1))
+                    pos += length
+            elif isinstance(seq[ix], Cat):  # Category
+                if self[pos] in seq[ix]:  # This may change if categories are allowed to contain sequences
+                    pos += 1
+                else:
+                    matched = False
+            elif seq[ix] == '*':  # Wildcard
+                stack.append((pos+1, ix))
+            elif self[pos] == seq[ix]:  # Grapheme
+                pos += 1
+            else:
+                matched = False
+            if matched:
+                ix += 1
+            elif stack:
+                pos, ix = stack.pop()  # Jump back to the last optional, and try again without it
+            else:
+                break  # Total match failure
+        else:
+            return True, pos-start
+        return False, 0
+        
     def match_env(self, env, pos=0, tar=None):  # Test if the env matches the word
         '''Match a sound change environment to the word.
         
@@ -253,11 +275,11 @@ class Word(list):
             return env[0] in self
         else:
             if pos:
-                matchLeft = self[::-1].find(env[0],-pos)
+                matchleft = self[::-1].find(env[0],-pos)
             else:  # At the left edge, which can only be matched by a null env
-                matchLeft = -1 if env[0] else 0
-            matchRight = self.find(env[1], pos+len(tar))
-            return matchLeft == matchRight == 0
+                matchleft = -1 if env[0] else 0
+            matchright = self.find(env[1], pos+len(tar))
+            return matchleft == matchright == 0
 
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
 
