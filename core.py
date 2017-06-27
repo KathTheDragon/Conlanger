@@ -21,7 +21,6 @@ Investigate reindexing Word
 Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
-Make Word immutable
 
 === Features ===
 Implement cat subsets - maybe?

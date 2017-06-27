@@ -21,12 +21,10 @@ Functions:
 Check that tar still matches immediately before replacement (difficult)
 Move compiling code to own functions
 Is there a better name for Rule.else_?
-Make Word immutable
 
 === Features ===
 Implement $ and syllables
 Implement " for copying previous segment
-Implement * in the target, with variants **, *?, **? (important)
 Implement extended category substitution (important)
 Implement movement rule: syntax is tar>^env1/env2 (find a tar matching env2, and copy it to the location(s) matching env1). ^? moves instead of copying
 Implement additional logic options for environments
@@ -183,27 +181,36 @@ class Rule():
             else:
                 tar, indices = [], []
             _matches = []
-            index = 1
-            while True:
-                match, _tar = word.find(tar, index, return_match=True)  # Find the next place where tar matches
-                if match == -1:  # No more matches
-                    break
-                index += match
-                _matches.append((index, _tar, i))
-                index += 1
+            for pos in range(len(word)):  # Find all matches
+                match, length = word.match_pattern(tar, index)
+                if match:  # tar matches at pos
+                    _tar = word[pos:pos+length]
+                    _matches.append((pos, _tar, i))
+            # Filter only those matches selected by the given indices
             if not indices:
-                indices = range(len(_matches))
-            matches += [_matches[i] for i in indices]
+                matches += _matches
+            else:
+                matches += [_matches[ix] for ix in indices]
+        # Filter only those matches that fit the environment - also record the corresponding replacement
+        reps = []
+        while i < len(matches):
+            valid, rep = self.check_match(matches[i], word)
+            if valid:
+                reps.append(rep)
+                i += 1
+            else:
+                del matches[i]
         # Filter overlaps
         i = 1  # This marks the match we're testing for overlapping the previous match
         while i < len(matches):
             if matches[i][0] < matches[i-1][0] + len(matches[i-1][1]):  # Overlap
                 del matches[i]
+                del reps[i]
             else:
                 i += 1
         results = []
-        for match in sorted(matches, reverse=True):
-            result, word = self.apply_match(match, word)
+        for match, rep in sorted(zip(matches, reps), reverse=True):
+            result, word = self.apply_match(match, rep, word)
             results.append(result)
         if self.flags['ltr']:
             word = word[::-1]
@@ -213,35 +220,38 @@ class Rule():
             raise WordUnchanged
         return word
     
-    def apply_match(self, match, word):
-        '''Apply a replacement if a match meets the rule condition.
+    def check_match(self, match, word):
+        index, tar, i = match
+        if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
+            if self.else_ is not None:  # Try checking else_
+                return self.else_.check_match(match, word)
+        elif any(word.match_env(env, index, tar) for env in self.envs):
+            return True, self.reps[i].copy()
+        elif not self.excs:
+            if self.else_ is not None:  # Try checking else_
+                return self.else_.check_match(match, word)
+        return False, []
+    
+    def apply_match(self, match, rep, word):
+        '''Apply a replacement to a word
         
         Arguments:
             match -- the match to be checked
+            rep   -- the replacement to be used
             word  -- the word to check against
         
         Returns a bool.
         '''
         index, tar, i = match
-        if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
-            if self.else_ is not None:  # Try checking else_
-                return self.else_.apply_match(match, word)
-        elif any(word.match_env(env, index, tar) for env in self.envs):
-            # Apply the replacement
-            rep = self.reps[i].copy()
-            if len(rep) == 1 and isinstance(rep[0], Cat):
-                rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
-            for i in reversed(range(len(rep))):
-                if rep[i] == '%':  # Target copying
-                    rep[i:i+1] = tar
-                elif rep[i] == '<':  # Target reversal/metathesis
-                    rep[i:i+1] = reversed(tar)
-            word = word[:index] + Word(rep) + word[index+len(tar):]
-            return True, word
-        elif not self.excs:
-            if self.else_ is not None:  # Try checking else_
-                return self.else_.apply_match(match, word)
-        return False, word
+        if len(rep) == 1 and isinstance(rep[0], Cat):
+            rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
+        for i in reversed(range(len(rep))):
+            if rep[i] == '%':  # Target copying
+                rep[i:i+1] = tar
+            elif rep[i] == '<':  # Target reversal/metathesis
+                rep[i:i+1] = reversed(tar)
+        word = word[:index] + Word(rep) + word[index+len(tar):]
+        return word
 
 # == Functions == #
 def parse_wordset(wordset, graphs=None):
