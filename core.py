@@ -85,8 +85,8 @@ class Cat(list):
     def __sub__(self, cat):
         return Cat(value for value in self if value not in cat)
 
-class Word(list):
-    '''Represents a word as a list of graphemes.
+class Word(tuple):
+    '''Represents a word as a tuple of graphemes.
     
     Instance variables:
         graphs    -- a list of graphemes (list)
@@ -115,7 +115,7 @@ class Word(list):
             lexeme = []
         elif isinstance(lexeme, str):
             lexeme = parse_word(f' {lexeme} ', self.graphs)
-        list.__init__(self, lexeme)
+        tuple.__init__(self, lexeme)
         self.syllables = syllables  # Do a bit of sanity checking here
     
     def __repr__(self):
@@ -144,22 +144,22 @@ class Word(list):
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
         else:
-            return list.__contains__(self, item)
+            return tuple.__contains__(self, item)
     
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return Word(list.__getitem__(self, item), self.graphs)
+            return Word(tuple.__getitem__(self, item), self.graphs)
         else:
-            return list.__getitem__(self, item)
+            return tuple.__getitem__(self, item)
     
     def __add__(self, other):
-        return Word(list.__add__(self, other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
+        return Word(tuple(self) + tuple(other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
     
     def __mul__(self, other):
-        return Word(list.__mul__(self, other), self.graphs, self.syllables * other)
+        return Word(tuple(self) * other, self.graphs, self.syllables * other)
     
     def __rmul__(self, other):
-        return Word(list.__rmul__(self, other), self.graphs, self.syllables * other)
+        return Word(tuple(self) * other, self.graphs, self.syllables * other)
     
     def copy(self):
         return Word(self, self.graphs, self.syllables)
@@ -178,7 +178,7 @@ class Word(list):
             if self[i] not in chars:
                 end = i+1
                 break
-        self[:] = self[start:end]
+        return self[start:end]
     
     def find(self, sub, start=None, end=None, return_match=False):
         '''Match a sequence using pattern notation to the word.
@@ -199,9 +199,8 @@ class Word(list):
             end = len(self)
         elif end < 0:
             end += len(self)
-        sub = sub.copy()
         if isinstance(sub, Word):
-            sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
+            sub = sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
         for pos in range(start, end):
             match, length = self.match_pattern(sub, pos, end)
             if match:

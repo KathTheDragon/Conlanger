@@ -170,9 +170,9 @@ class Rule():
         Raises RuleFailed if the rule did not apply to the word.
         Raises WordUnchanged if the word was not changed by the rule.
         '''
-        phones = list(word)
+        phones = tuple(word)
         if self.flags['ltr']:
-            word.reverse()
+            word = word[::-1]
         matches = []
         tars = self.tars
         if not tars:
@@ -201,13 +201,17 @@ class Rule():
                 del matches[i]
             else:
                 i += 1
-        results = [self.apply_match(match, word) for match in sorted(matches, reverse=True)]
+        results = []
+        for match in sorted(matches, reverse=True):
+            result, word = self.apply_match(match, word)
+            results.append(result)
         if self.flags['ltr']:
-            word.reverse()
+            word = word[::-1]
         if not any(results):
             raise RuleFailed
-        if phones == list(word):
+        if phones == tuple(word):
             raise WordUnchanged
+        return word
     
     def apply_match(self, match, word):
         '''Apply a replacement if a match meets the rule condition.
@@ -232,12 +236,12 @@ class Rule():
                     rep[i:i+1] = tar
                 elif rep[i] == '<':  # Target reversal/metathesis
                     rep[i:i+1] = reversed(tar)
-            word[index:index+len(tar)] = rep
-            return True
+            word = word[:index] + Word(rep) + word[index+len(tar):]
+            return True, word
         elif not self.excs:
             if self.else_ is not None:  # Try checking else_
                 return self.else_.apply_match(match, word)
-        return False
+        return False, word
 
 # == Functions == #
 def parse_wordset(wordset, graphs=None):
@@ -322,20 +326,22 @@ def parse_field(field, mode, cats=None):
             else:
                 env = [parse_syms(env, cats)]
             _field.append(env)
-    else:
+    elif mode == 'tars':
         for tar in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
-            if mode == 'tars':
-                if '@' in tar:
-                    tar, index = tar.split('@')
-                    indices = split(index, '|', minimal=True)
-                    for i in range(len(indices)):
-                        indices[i] = int(indices[i])
-                else:
-                    indices = []
+            if '@' in tar:
+                tar, index = tar.split('@')
+                indices = split(index, '|', minimal=True)
+                for i in range(len(indices)):
+                    indices[i] = int(indices[i])
+            else:
+                indices = []
             tar = parse_syms(tar, cats)
-            if mode == 'tars':
-                tar = (tar, indices)
+            tar = (tar, indices)
             _field.append(tar)
+    elif mode == 'reps':
+        for rep in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
+            rep = parse_syms(rep, cats)
+            _field.append(rep)
     return _field
 
 def parse_flags(flags):
@@ -388,7 +394,7 @@ def apply_ruleset(wordset, ruleset, graphs=None, cats=None, debug=False):
                         for j in range(rule.flags['repeat']):
                             try:
                                 if randint(1, 100) <= rule.flags['chance']:
-                                    rule.apply(wordset[i])
+                                    wordset[i] = rule.apply(wordset[i])
                                 else:
                                     applied[i] = False
                             except RuleFailed:  # The rule didn't apply, make note of this
