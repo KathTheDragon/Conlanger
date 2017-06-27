@@ -15,18 +15,20 @@ Functions:
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
+* doesn't actually behave how I want it to
 
 === Implementation ===
 Check that tar still matches immediately before replacement (difficult)
 Move compiling code to own functions
 Is there a better name for Rule.else_?
+Make Word immutable
 
 === Features ===
 Implement $ and syllables
 Implement " for copying previous segment
 Implement * in the target, with variants **, *?, **? (important)
-Implement ^ for range indices (important)
 Implement extended category substitution (important)
+Implement movement rule: syntax is tar>^env1/env2 (find a tar matching env2, and copy it to the location(s) matching env1). ^? moves instead of copying
 Implement additional logic options for environments
 Implement repetition shorthand
 Is it possible to implement a>b>c as notation for a chain shift?
@@ -192,6 +194,13 @@ class Rule():
             if not indices:
                 indices = range(len(_matches))
             matches += [_matches[i] for i in indices]
+        # Filter overlaps
+        i = 1  # This marks the match we're testing for overlapping the previous match
+        while i < len(matches):
+            if matches[i][0] < matches[i-1][0] + len(matches[i-1][1]):  # Overlap
+                del matches[i]
+            else:
+                i += 1
         results = [self.apply_match(match, word) for match in sorted(matches, reverse=True)]
         if self.flags['ltr']:
             word.reverse()

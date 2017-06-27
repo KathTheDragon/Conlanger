@@ -21,6 +21,7 @@ Investigate reindexing Word
 Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
+Make Word immutable
 
 === Features ===
 Implement cat subsets - maybe?
@@ -208,7 +209,7 @@ class Word(list):
         else:
             return (-1, []) if return_match else -1
     
-    def match_pattern(self, seq, start, end):
+    def match_pattern(self, seq, start=None, end=None):
         '''Match a pattern sequence to the word.
         
         Return if the sequence matches the start of the given slice of the word, and how much of the word was matched.
@@ -220,7 +221,16 @@ class Word(list):
         
         Returns a tuple of a bool and an int.
         '''
-        stack = []  # This records the positions of matched optionals and wildcards, if we need to jump back
+        # Interpret start and end according to slice notation
+        if start is None:
+            start = 0
+        elif start < 0:
+            start += len(self)
+        if end is None:
+            end = len(self)
+        elif end < 0:
+            end += len(self)
+        stack = []  # This records the positions of matched optionals, if we need to jump back
         pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
         ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
         while ix < len(seq):
@@ -237,8 +247,21 @@ class Word(list):
                     pos += 1
                 else:
                     matched = False
-            elif seq[ix] == '*':  # Wildcard
-                stack.append((pos+1, ix))
+            elif seq[ix] in '**?':  # Wildcards
+                if '?' in seq[ix]:  # Non-greedy - advance ltr
+                    wrange = range(pos+1, end)
+                else:  # Greedy - advance rtl
+                    wrange = reversed(range(pos+1, end))
+                for wpos in wrange:
+                    wmatch, wlength = self.match_pattern(seq[ix+1:], wpos, end)
+                    if wmatch:  # We have a match at wpos
+                        # Match is valid if wildcard is extended, or if wildcard is unextended but not matching '#'
+                        if '**' in seq[ix] or '#' not in self[pos:wpos]:
+                            ix = len(seq) - 1  # This will cause the outer loop to terminate
+                            pos = wpos + wlength
+                            break
+                else:  # Match fails if we can't match the rest of the sequence
+                    matched = False
             elif self[pos] == seq[ix]:  # Grapheme
                 pos += 1
             else:
@@ -275,10 +298,10 @@ class Word(list):
             return env[0] in self
         else:
             if pos:
-                matchleft = self[::-1].match_pattern(env[0], len(self)-pos, len(self))[0]
+                matchleft = self[::-1].match_pattern(env[0], -pos)[0]
             else:  # At the left edge, which can only be matched by a null env
                 matchleft = -1 if env[0] else 0
-            matchright = self.match_pattern(env[1], pos+len(tar), len(self))[0]
+            matchright = self.match_pattern(env[1], pos+len(tar))[0]
             return matchleft and matchright
 
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
