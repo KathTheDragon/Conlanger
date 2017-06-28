@@ -84,8 +84,8 @@ class Cat(list):
     def __sub__(self, cat):
         return Cat(value for value in self if value not in cat)
 
-class Word(tuple):
-    '''Represents a word as a tuple of graphemes.
+class Word(list):
+    '''Represents a word as a list of graphemes.
     
     Instance variables:
         graphs    -- a list of graphemes (list)
@@ -105,16 +105,24 @@ class Word(tuple):
         Arguments:
             lexeme    -- the word (str)
             syllables -- list of tuples representing syllables (list)
-            graphs    -- list of graphemes (list)
+            graphs    -- category of graphemes (Cat)
         '''
         if graphs is None:
-            graphs = ["'"]
+            graphs = Cat("'")
         self.graphs = graphs
         if lexeme is None:
             lexeme = []
         elif isinstance(lexeme, str):
             lexeme = parse_word(f' {lexeme} ', self.graphs)
-        tuple.__init__(self, lexeme)
+        else:
+            for i in reversed(range(1, len(lexeme))):
+                if not isinstance(lexeme[i], str):  # Make sure we only get strings
+                    raise ValueError('Iterable values must be strings.')
+                if lexeme[i-1] == lexeme[i] == '#':  # Make sure we don't have multiple adjacent '#'s
+                    del lexeme[i]
+        list.__init__(self, lexeme)
+        if syllables is None:
+            syllables = []
         self.syllables = syllables  # Do a bit of sanity checking here
     
     def __repr__(self):
@@ -143,25 +151,41 @@ class Word(tuple):
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
         else:
-            return tuple.__contains__(self, item)
+            return list.__contains__(self, item)
     
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return Word(tuple.__getitem__(self, item), self.graphs)
+            return Word(list.__getitem__(self, item), self.graphs)
         else:
-            return tuple.__getitem__(self, item)
+            return list.__getitem__(self, item)
+    
+    __setitem__ = None
+    __delitem__ = None
     
     def __add__(self, other):
-        return Word(tuple(self) + tuple(other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
+        return Word(list(self) + list(other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
     
     def __mul__(self, other):
-        return Word(tuple(self) * other, self.graphs, self.syllables * other)
+        return Word(list(self) * other, self.graphs, self.syllables * other)
     
     def __rmul__(self, other):
-        return Word(tuple(self) * other, self.graphs, self.syllables * other)
+        return Word(list(self) * other, self.graphs, self.syllables * other)
     
-    def copy(self):
-        return Word(self, self.graphs, self.syllables)
+    def __iadd__(*args):
+        return NotImplemented
+    
+    def __imul__(*args):
+        return NotImplemented
+    
+    append = None
+    clear = None
+    copy = None
+    extend = None
+    insert = None
+    pop = None
+    remove = None
+    reverse = None
+    sort = None
     
     def strip(self, chars=None):
         if chars is None:
