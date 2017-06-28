@@ -340,6 +340,9 @@ def parse_syms(syms, cats=None):
     '''
     if cats is None:
         cats = {}
+    if 'graphs' not in cats:
+        cats['graphs'] = Cat()
+    cats['graphs'] += ['**', '*?', '**?']  # Easiest way to have multi-letter symbols parse correctly
     for char in '([{}])':
         syms = syms.replace(char, f' {char} ')
     syms = split(syms, ' ', nesting=(0, '([{', '}])'), minimal=True)
@@ -358,7 +361,7 @@ def parse_syms(syms, cats=None):
         elif syms[i][0] == '{':  # Unimplemented - delete
             del syms[i]
         else:  # Text - parse as word
-            syms[i:i+1] = parse_word(syms[i])
+            syms[i:i+1] = parse_word(syms[i], cats['graphs'])
     return syms
 
 def parse_word(word, graphs=None):
