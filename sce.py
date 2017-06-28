@@ -131,7 +131,7 @@ class Rule():
             self.else_ = Rule(''.join(else_), cats)
         else:
             self.else_ = None
-        if self.flags['ltr']:
+        if self.flags['rtl']:
             self.reverse()
         return
     
@@ -169,7 +169,7 @@ class Rule():
         Raises WordUnchanged if the word was not changed by the rule.
         '''
         phones = tuple(word)
-        if self.flags['ltr']:
+        if self.flags['rtl']:
             word = word[::-1]
         matches = []
         tars = self.tars
@@ -212,7 +212,7 @@ class Rule():
         for match, rep in sorted(zip(matches, reps), reverse=True):
             result, word = self.apply_match(match, rep, word)
             results.append(result)
-        if self.flags['ltr']:
+        if self.flags['rtl']:
             word = word[::-1]
         if not any(results):
             raise RuleFailed
@@ -362,7 +362,7 @@ def parse_flags(flags):
         
     Returns a dictionary.
     '''
-    _flags = dict(ignore=0, ditto=0, stop=0, ltr=0, repeat=1, age=1, chance=100)  # Default values
+    _flags = dict(ignore=0, ditto=0, stop=0, rtl=0, repeat=1, age=1, chance=100)  # Default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
