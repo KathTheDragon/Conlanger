@@ -21,6 +21,7 @@ Investigate reindexing Word
 Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
+After everything, look into using metaclasses in Word
 
 === Features ===
 Implement cat subsets - maybe?
@@ -341,7 +342,7 @@ def parse_syms(syms, cats=None):
     if cats is None:
         cats = {}
     if 'graphs' not in cats:
-        cats['graphs'] = Cat()
+        cats['graphs'] = Cat("'")
     cats['graphs'] += ['**', '*?', '**?']  # Easiest way to have multi-letter symbols parse correctly
     for char in '([{}])':
         syms = syms.replace(char, f' {char} ')
@@ -385,7 +386,7 @@ def parse_word(word, graphs=None):
     if graphs is None:
         graphs = ["'"]
     separator = graphs[0]
-    polygraphs = (graph for graph in graphs if len(graph) > 1)
+    polygraphs = [graph for graph in graphs if len(graph) > 1]
     graphemes = []
     for char in '#'.join(f'.{word}.'.split()).strip('.')+separator:  # Convert all whitespace to a single #
         test += char
