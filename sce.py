@@ -66,7 +66,7 @@ class Rule():
         apply       -- apply the rule to a word
         apply_match -- apply a single match to a word
     '''
-    
+        
     __slots__ = ['rule', 'tars', 'reps', 'envs', 'excs', 'else_', 'flags']
     
     def __init__(self, rule='', cats=None):  # Format is tars>reps/envs!excs flag; envs, excs, and flag are all optional
@@ -182,7 +182,7 @@ class Rule():
                 tar, indices = [], []
             _matches = []
             for pos in range(len(word)):  # Find all matches
-                match, length = word.match_pattern(tar, index)
+                match, length = word.match_pattern(tar, pos)
                 if match:  # tar matches at pos
                     _tar = word[pos:pos+length]
                     _matches.append((pos, _tar, i))
@@ -193,6 +193,7 @@ class Rule():
                 matches += [_matches[ix] for ix in indices]
         # Filter only those matches that fit the environment - also record the corresponding replacement
         reps = []
+        i = 0
         while i < len(matches):
             valid, rep = self.check_match(matches[i], word)
             if valid:
@@ -208,13 +209,11 @@ class Rule():
                 del reps[i]
             else:
                 i += 1
-        results = []
         for match, rep in sorted(zip(matches, reps), reverse=True):
-            result, word = self.apply_match(match, rep, word)
-            results.append(result)
+            word = self.apply_match(match, rep, word)
         if self.flags['rtl']:
             word = word[::-1]
-        if not any(results):
+        if not any(reps):
             raise RuleFailed
         if phones == tuple(word):
             raise WordUnchanged
@@ -226,7 +225,7 @@ class Rule():
             if self.else_ is not None:  # Try checking else_
                 return self.else_.check_match(match, word)
         elif any(word.match_env(env, index, tar) for env in self.envs):
-            return True, self.reps[i].copy()
+            return True, self.reps[i]
         elif not self.excs:
             if self.else_ is not None:  # Try checking else_
                 return self.else_.check_match(match, word)
@@ -243,14 +242,29 @@ class Rule():
         Returns a bool.
         '''
         index, tar, i = match
-        if len(rep) == 1 and isinstance(rep[0], Cat):
-            rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
-        for i in reversed(range(len(rep))):
-            if rep[i] == '%':  # Target copying
-                rep[i:i+1] = tar
-            elif rep[i] == '<':  # Target reversal/metathesis
-                rep[i:i+1] = reversed(tar)
-        word = word[:index] + Word(rep) + word[index+len(tar):]
+        if isinstance(rep, list):  # Replacement
+            rep = rep.copy()
+            if len(rep) == 1 and isinstance(rep[0], Cat):  # This will be redone to allow extended cat substitution
+                rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
+            for i in reversed(range(len(rep))):
+                if rep[i] == '%':  # Target copying
+                    rep[i:i+1] = tar
+                elif rep[i] == '<':  # Target reversal/metathesis
+                    rep[i:i+1] = reversed(tar)
+            word = word[:index] + Word(rep) + word[index+len(tar):]
+        else:  # Movement
+            mode, envs = rep
+            matches = []
+            for pos in range(len(word)):  # Find all matches
+                if any(word.match_env(env, pos) for env in envs):
+                    matches.append(pos)
+            if mode == '^?':  # Move - delete original tar
+                word = word[:index] + word[index+len(tar):]
+                for i in range(len(matches)):  # Adjust matches
+                    if matches[i] >= index+len(tar):
+                        matches[i] -= len(tar)
+            for match in sorted(matches, reverse=True):
+                word = word[:match] + tar + word[match:]
         return word
 
 # == Functions == #
@@ -328,7 +342,7 @@ def parse_field(field, mode, cats=None):
     _field = []
     if mode == 'envs':
         for env in split(field, '|', minimal=True):
-            if '~' in env:  # ~X is equivalent to X_,_X
+            if env.startswith('~'):  # ~X is equivalent to X_,_X
                 _field += parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats)
             elif '_' in env:
                 env = env.split('_')
@@ -350,7 +364,12 @@ def parse_field(field, mode, cats=None):
             _field.append(tar)
     elif mode == 'reps':
         for rep in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
-            rep = parse_syms(rep, cats)
+            if rep.startswith('^?'):  # Movement rule
+                rep = ('^?', parse_field(rep.strip('^?'), 'envs', cats))
+            elif rep.startswith('^'):  # Copy rule
+                rep = ('^', parse_field(rep.strip('^'), 'envs', cats))
+            else:
+                rep = parse_syms(rep, cats)
             _field.append(rep)
     return _field
 
