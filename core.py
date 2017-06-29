@@ -224,12 +224,21 @@ class Word(list):
             end += len(self)
         if isinstance(sub, Word):
             sub = sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
-        for pos in range(start, end):
-            match, length = self.match_pattern(sub, pos, end)
-            if match:
-                return (pos-start, self[pos:pos+length]) if return_match else pos-start
+        if isinstance(sub[-1], tuple):  # Counting
+            matches = 0
+            op, count = sub[-1]
+            for pos in range(start, end):
+                match, length = self.match_pattern(sub[:-1], pos, end)
+                if match:
+                    matches += 1
+            if eval(f'matches {op} count'):
+                return (1, []) if return_match else 1
         else:
-            return (-1, []) if return_match else -1
+            for pos in range(start, end):
+                match, length = self.match_pattern(sub, pos, end)
+                if match:
+                    return (pos-start, self[pos:pos+length]) if return_match else pos-start
+        return (-1, []) if return_match else -1
     
     def match_pattern(self, seq, start=None, end=None):
         '''Match a pattern sequence to the word.
@@ -259,16 +268,16 @@ class Word(list):
             matched = True
             if pos >= end:  # We've reached the end of the slice, so the match fails
                 matched = False
-            elif isinstance(seq[ix], tuple):  # Optional sequence
-                match, length = self.match_pattern(seq[ix], pos, end)
-                if match:  # If the optional can be matched, match it
-                    stack.append((pos, ix+1))
-                    pos += length
             elif isinstance(seq[ix], Cat):  # Category
                 if self[pos] in seq[ix]:  # This may change if categories are allowed to contain sequences
                     pos += 1
                 else:
                     matched = False
+            elif isinstance(seq[ix], list):  # Optional sequence
+                match, length = self.match_pattern(seq[ix], pos, end)
+                if match:  # If the optional can be matched, match it
+                    stack.append((pos, ix+1))
+                    pos += length
             elif seq[ix] in '**?':  # Wildcards
                 if '?' in seq[ix]:  # Non-greedy - advance ltr
                     wrange = range(pos+1, end)
@@ -311,11 +320,12 @@ class Word(list):
         env = env.copy()
         if tar is None:
             tar = []
-        for i in reversed(range(len(env))):
-            if env[i] == '%':
-                env[i:i+1] = tar
-            if env[i] == '<':
-                env[i:i+1] = reversed(tar)
+        for j in range(len(env)):
+            for i in reversed(range(len(env[j]))):
+                if env[j][i] == '%':
+                    env[j][i:i+1] = tar
+                if env[j][i] == '<':
+                    env[j][i:i+1] = reversed(tar)
         if len(env) == 1:
             return env[0] in self
         else:
@@ -352,16 +362,23 @@ def parse_syms(syms, cats=None):
         syms[i] = syms[i].replace(' ', '')
         if not syms[i]:
             del syms[i]
-        elif syms[i][0] == '(':  # Optional - parse to tuple
-            syms[i] = tuple(parse_syms(syms[i].strip('()'), cats))
+        elif syms[i][0] == '(':  # Optional - parse to list
+            syms[i] = parse_syms(syms[i].strip('()'), cats)
         elif syms[i][0] == '[':  # Category - parse to Cat
             syms[i] = syms[i].strip('[]')
             if ',' in syms[i]:  # Nonce cat
                 syms[i] = Cat(syms[i])
             else:  # Named cat
                 syms[i] = cats[syms[i]]
-        elif syms[i][0] == '{':  # Repetitions - parse to int
-            syms[i] = int(syms[i].strip('{}'))
+        elif syms[i][0] == '{':  # Numbers - a few types of this
+            syms[i] = syms[i].strip('{}')
+            if syms[i][0] in '=<>':  # Counting - parse to tuple
+                op = syms[i][0]
+                if syms[i][1] == '=' or op == '=':
+                    op += '='
+                syms[i] = (op, int(syms[i].strip('=<>')))
+            else:  # Repetitions - parse to int
+                syms[i] = int(syms[i])
         else:  # Text - parse as word
             syms[i:i+1] = parse_word(syms[i], cats['graphs'])
     for i in reversed(range(len(syms))):  # Second pass to evaluate repetitions

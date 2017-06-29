@@ -82,7 +82,7 @@ class Rule():
             rule = '>'+rule[1:]
         elif rule[0] == '-':
             rule = rule[1:]
-        rule = rule.replace('>', ' >').replace('/', ' /').replace('!', ' !').split(' ')
+        rule = rule.replace('>', ' >').replace('{ >', '{>').replace('/', ' /').replace('!', ' !').split(' ')
         tars = rule.pop(0)
         # We want to extract just the first iteration of (reps, envs, excs) and store everything else in else_
         # To do this, we observe that if we fill in missing fields once we reach a later field, then if we hit
@@ -171,18 +171,17 @@ class Rule():
         matches = []
         tars = self.tars
         if not tars:
-            tars = [([], [])]
+            tars = [([], ())]
         for i in range(len(tars)):
             if tars[i]:
                 tar, indices = tars[i]
             else:
-                tar, indices = [], []
+                tar, indices = [], ()
             _matches = []
             for pos in range(len(word)):  # Find all matches
                 match, length = word.match_pattern(tar, pos)
                 if match:  # tar matches at pos
-                    _tar = word[pos:pos+length]
-                    _matches.append((pos, _tar, i))
+                    _matches.append((pos, length, i))
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
@@ -201,7 +200,7 @@ class Rule():
         # Filter overlaps
         i = 1  # This marks the match we're testing for overlapping the previous match
         while i < len(matches):
-            if matches[i][0] < matches[i-1][0] + len(matches[i-1][1]):  # Overlap
+            if matches[i][0] < matches[i-1][0] + matches[i-1][1]:  # Overlap
                 del matches[i]
                 del reps[i]
             else:
@@ -210,14 +209,15 @@ class Rule():
             word = self.apply_match(match, rep, word)
         if self.flags['rtl']:
             word = word[::-1]
-        if not any(reps):
+        if not reps:
             raise RuleFailed
         if phones == tuple(word):
             raise WordUnchanged
         return word
     
     def check_match(self, match, word):
-        index, tar, i = match
+        index, length, i = match
+        tar = word[index:index+length]
         if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
             if self.else_ is not None:  # Try checking else_
                 return self.else_.check_match(match, word)
@@ -238,7 +238,8 @@ class Rule():
         
         Returns a bool.
         '''
-        index, tar, i = match
+        index, length, i = match
+        tar = word[index:index+length]
         if isinstance(rep, list):  # Replacement
             rep = rep.copy()
             if len(rep) == 1 and isinstance(rep[0], Cat):  # This will be redone to allow extended cat substitution
@@ -248,18 +249,20 @@ class Rule():
                     rep[i:i+1] = tar
                 elif rep[i] == '<':  # Target reversal/metathesis
                     rep[i:i+1] = reversed(tar)
-            word = word[:index] + Word(rep) + word[index+len(tar):]
+            word = word[:index] + Word(rep) + word[index+length:]
         else:  # Movement
-            mode, envs = rep
-            matches = []
-            for pos in range(len(word)):  # Find all matches
-                if any(word.match_env(env, pos) for env in envs):
-                    matches.append(pos)
-            if mode == '^?':  # Move - delete original tar
-                word = word[:index] + word[index+len(tar):]
-                for i in range(len(matches)):  # Adjust matches
-                    if matches[i] >= index+len(tar):
-                        matches[i] -= len(tar)
+            if isinstance(rep[1], list):  # Environment
+                mode, envs = rep
+                matches = []
+                for pos in range(len(word)):  # Find all matches
+                    if any(word.match_env(env, pos) for env in envs):
+                        if mode == 'move' and pos >= index + length:  # We'll need to adjust the matches down
+                            pos -= length
+                        matches.append(pos)
+            else:  # Indices
+                mode, matches = rep[0], list(rep[1])
+            if mode == 'move':  # Move - delete original tar
+                word = word[:index] + word[index+length:]
             for match in sorted(matches, reverse=True):
                 word = word[:match] + tar + word[match:]
         return word
@@ -350,22 +353,26 @@ def parse_field(field, mode, cats=None):
     elif mode == 'tars':
         for tar in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
             if '@' in tar:
-                tar, index = tar.split('@')
-                indices = split(index, '|', minimal=True)
-                for i in range(len(indices)):
-                    indices[i] = int(indices[i])
+                tar, indices = tar.split('@')
+                indices = tuple(int(index) for index in split(indices, '|', minimal=True))
             else:
-                indices = []
+                indices = ()
             tar = parse_syms(tar, cats)
             tar = (tar, indices)
             _field.append(tar)
     elif mode == 'reps':
         for rep in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
-            if rep.startswith('^?'):  # Movement rule
-                rep = ('^?', parse_field(rep.strip('^?'), 'envs', cats))
-            elif rep.startswith('^'):  # Copy rule
-                rep = ('^', parse_field(rep.strip('^'), 'envs', cats))
-            else:
+            if rep.startswith('^'):  # Movement rule
+                if rep.startswith('^?'):
+                    mode = 'move'
+                else:
+                    mode = 'copy'
+                rep = rep.strip('^?')
+                if rep.startswith('@'):  # Indices
+                    rep = (mode, tuple(int(index) for index in split(rep.strip('@'), '|', minimal=True)))
+                else:  # Environment
+                    rep = (mode, parse_field(rep, 'envs', cats))
+            else:  # Replace rule
                 rep = parse_syms(rep, cats)
             _field.append(rep)
     return _field
