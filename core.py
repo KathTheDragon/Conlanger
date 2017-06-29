@@ -24,7 +24,6 @@ Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
 
 === Features ===
-Implement cat subsets - maybe?
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -361,10 +360,13 @@ def parse_syms(syms, cats=None):
                 syms[i] = Cat(syms[i])
             else:  # Named cat
                 syms[i] = cats[syms[i]]
-        elif syms[i][0] == '{':  # Unimplemented - delete
-            del syms[i]
+        elif syms[i][0] == '{':  # Repetitions - parse to int
+            syms[i] = int(syms[i].strip('{}'))
         else:  # Text - parse as word
             syms[i:i+1] = parse_word(syms[i], cats['graphs'])
+    for i in reversed(range(len(syms))):  # Second pass to evaluate repetitions
+        if isinstance(syms[i], int):
+            syms[i-1:i+1] = [syms[i-1]]*syms[i]
     return syms
 
 def parse_word(word, graphs=None):

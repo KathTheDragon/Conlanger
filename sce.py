@@ -15,7 +15,6 @@ Functions:
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
-* doesn't actually behave how I want it to
 
 === Implementation ===
 Check that tar still matches immediately before replacement (difficult)
@@ -26,9 +25,7 @@ Is there a better name for Rule.else_?
 Implement $ and syllables
 Implement " for copying previous segment
 Implement extended category substitution (important)
-Implement movement rule: syntax is tar>^env1/env2 (find a tar matching env2, and copy it to the location(s) matching env1). ^? moves instead of copying
 Implement additional logic options for environments
-Implement repetition shorthand
 Is it possible to implement a>b>c as notation for a chain shift?
 
 === Style ===
