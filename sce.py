@@ -24,7 +24,6 @@ Is there a better name for Rule.else_?
 === Features ===
 Implement $ and syllables
 Implement " for copying previous segment
-Implement extended category substitution (important)
 Implement additional logic options for environments
 Is it possible to implement a>b>c as notation for a chain shift?
 
@@ -179,9 +178,9 @@ class Rule():
                 tar, indices = [], ()
             _matches = []
             for pos in range(len(word)):  # Find all matches
-                match, length = word.match_pattern(tar, pos)
+                match, length, catixes = word.match_pattern(tar, pos, return_cats=True)
                 if match:  # tar matches at pos
-                    _matches.append((pos, length, i))
+                    _matches.append((pos, length, catixes, i))
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
@@ -190,13 +189,13 @@ class Rule():
         # Filter only those matches that fit the environment - also record the corresponding replacement
         reps = []
         i = 0
-        while i < len(matches):
-            valid, rep = self.check_match(matches[i], word)
-            if valid:
-                reps.append(rep)
-                i += 1
+        for i in reversed(range(len(matches))):
+            if self.check_match(matches[i], word):
+                # Save the appropriate rep
+                reps.append(self.reps[matches[i][3]])
             else:
                 del matches[i]
+        reps.reverse()
         # Filter overlaps
         i = 1  # This marks the match we're testing for overlapping the previous match
         while i < len(matches):
@@ -216,17 +215,17 @@ class Rule():
         return word
     
     def check_match(self, match, word):
-        index, length, i = match
-        tar = word[index:index+length]
-        if self.excs and any(word.match_env(exc, index, tar) for exc in self.excs):
+        pos, length = match[:2]
+        tar = word[pos:pos+length]
+        if self.excs and any(word.match_env(exc, pos, tar) for exc in self.excs):
             if self.else_ is not None:  # Try checking else_
                 return self.else_.check_match(match, word)
-        elif any(word.match_env(env, index, tar) for env in self.envs):
-            return True, self.reps[i]
+        elif any(word.match_env(env, pos, tar) for env in self.envs):
+            return True
         elif not self.excs:
             if self.else_ is not None:  # Try checking else_
                 return self.else_.check_match(match, word)
-        return False, []
+        return False
     
     def apply_match(self, match, rep, word):
         '''Apply a replacement to a word
@@ -238,31 +237,35 @@ class Rule():
         
         Returns a bool.
         '''
-        index, length, i = match
-        tar = word[index:index+length]
+        pos, length, catixes = match[:3]
+        tar = word[pos:pos+length]
         if isinstance(rep, list):  # Replacement
             rep = rep.copy()
-            if len(rep) == 1 and isinstance(rep[0], Cat):  # This will be redone to allow extended cat substitution
-                rep[0] = rep[0][self.tars[i][0][0].index(tar[0])]
+            # Deal with categories
+            ix = 0
+            for i in range(len(rep)):
+                if isinstance(rep[i], Cat):
+                    rep[i] = rep[i][catixes[ix]]
+            # Deal with target references
             for i in reversed(range(len(rep))):
                 if rep[i] == '%':  # Target copying
                     rep[i:i+1] = tar
                 elif rep[i] == '<':  # Target reversal/metathesis
                     rep[i:i+1] = reversed(tar)
-            word = word[:index] + Word(rep) + word[index+length:]
+            word = word[:pos] + Word(rep) + word[pos+length:]
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
                 matches = []
-                for pos in range(len(word)):  # Find all matches
-                    if any(word.match_env(env, pos) for env in envs):
-                        if mode == 'move' and pos >= index + length:  # We'll need to adjust the matches down
-                            pos -= length
-                        matches.append(pos)
+                for wpos in range(len(word)):  # Find all matches
+                    if any(word.match_env(env, wpos) for env in envs):
+                        if mode == 'move' and wpos >= pos + length:  # We'll need to adjust the matches down
+                            wpos -= length
+                        matches.append(wpos)
             else:  # Indices
                 mode, matches = rep[0], list(rep[1])
             if mode == 'move':  # Move - delete original tar
-                word = word[:index] + word[index+length:]
+                word = word[:pos] + word[pos+length:]
             for match in sorted(matches, reverse=True):
                 word = word[:match] + tar + word[match:]
         return word

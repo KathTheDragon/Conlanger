@@ -22,6 +22,8 @@ Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
+Redo wildcards
+- Calculate every position and push to the stack
 
 === Features ===
 
@@ -240,7 +242,7 @@ class Word(list):
                     return (pos-start, self[pos:pos+length]) if return_match else pos-start
         return (-1, []) if return_match else -1
     
-    def match_pattern(self, seq, start=None, end=None):
+    def match_pattern(self, seq, start=None, end=None, return_cats=False):
         '''Match a pattern sequence to the word.
         
         Return if the sequence matches the start of the given slice of the word, and how much of the word was matched.
@@ -262,6 +264,7 @@ class Word(list):
         elif end < 0:
             end += len(self)
         stack = []  # This records the positions of matched optionals, if we need to jump back
+        catixes = []  # This records the index of each category match. Due to limitations, this doesn't include categories in optional sequences
         pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
         ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
         while ix < len(seq):
@@ -270,6 +273,7 @@ class Word(list):
                 matched = False
             elif isinstance(seq[ix], Cat):  # Category
                 if self[pos] in seq[ix]:  # This may change if categories are allowed to contain sequences
+                    catixes.append(seq[ix].index(self[pos]))
                     pos += 1
                 else:
                     matched = False
@@ -304,8 +308,8 @@ class Word(list):
             else:
                 break  # Total match failure
         else:
-            return True, pos-start
-        return False, 0
+            return (True, pos-start) + ((catixes,) if return_cats else ())
+        return (False, 0) + (([],) if return_cats else ())
         
     def match_env(self, env, pos=0, tar=None):  # Test if the env matches the word
         '''Match a sound change environment to the word.
@@ -372,7 +376,7 @@ def parse_syms(syms, cats=None):
                 syms[i] = cats[syms[i]]
         elif syms[i][0] == '{':  # Numbers - a few types of this
             syms[i] = syms[i].strip('{}')
-            if syms[i][0] in '=<>':  # Counting - parse to tuple
+            if syms[i][0] in '=<>':  # Comparison - parse to tuple
                 op = syms[i][0]
                 if syms[i][1] == '=' or op == '=':
                     op += '='
