@@ -23,7 +23,6 @@ Is there a better name for Rule.else_?
 
 === Features ===
 Implement $ and syllables
-Implement " for copying previous segment
 Implement additional logic options for environments
 Is it possible to implement a>b>c as notation for a chain shift?
 
@@ -241,11 +240,13 @@ class Rule():
         tar = word[pos:pos+length]
         if isinstance(rep, list):  # Replacement
             rep = rep.copy()
-            # Deal with categories
+            # Deal with categories and ditto marks
             ix = 0
             for i in range(len(rep)):
                 if isinstance(rep[i], Cat):
                     rep[i] = rep[i][catixes[ix]]
+                elif rep[i] == '"':
+                    rep[i] = rep[i-1]
             # Deal with target references
             for i in reversed(range(len(rep))):
                 if rep[i] == '%':  # Target copying

@@ -297,6 +297,11 @@ class Word(list):
                             break
                 else:  # Match fails if we can't match the rest of the sequence
                     matched = False
+            elif seq[ix] == '"':  # Ditto mark
+                if self[pos] == self[pos-1]:
+                    pos += 1
+                else:
+                    matched = False
             elif self[pos] == seq[ix]:  # Grapheme
                 pos += 1
             else:
