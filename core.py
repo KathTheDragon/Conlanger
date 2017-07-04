@@ -22,13 +22,12 @@ Break out format checking into separate functions
 I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
-Redo wildcards
-- Calculate every position and push to the stack
 
 === Features ===
 
 === Style ===
 Consider where to raise/handle exceptions
+Go over docstrings
 '''
 
 from collections import namedtuple
@@ -252,7 +251,7 @@ class Word(list):
             start -- the index to begin matching from
             end   -- the index to match until
         
-        Returns a tuple of a bool and an int.
+        Returns a tuple.
         '''
         # Interpret start and end according to slice notation
         if start is None:
@@ -268,46 +267,30 @@ class Word(list):
         pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
         ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
         while ix < len(seq):
-            matched = True
-            if pos >= end:  # We've reached the end of the slice, so the match fails
-                matched = False
-            elif isinstance(seq[ix], Cat):  # Category
-                if self[pos] in seq[ix]:  # This may change if categories are allowed to contain sequences
-                    catixes.append(seq[ix].index(self[pos]))
-                    pos += 1
-                else:
-                    matched = False
-            elif isinstance(seq[ix], list):  # Optional sequence
-                match, length = self.match_pattern(seq[ix], pos, end)
-                if match:  # If the optional can be matched, match it
+            matched = False
+            if pos < end:  # Still in the slice
+                seg = seq[ix]
+                if isinstance(seg, str) and seg in '**?':  # Wildcards
+                    # wrange will be reversed since we push to the stack in the reverse order to how we want to check
+                    if '?' in seg:  # Non-greedy - advance ltr
+                        wrange = reversed(range(pos+1, end))
+                    else:  # Greedy - advance rtl
+                        wrange = range(pos+1, end)
+                    for wpos in wrange:
+                        # wpos is valid if wildcard is extended, or if wildcard is unextended but not matching '#'
+                        if '**' in seg or '#' not in self[pos:wpos]:
+                            stack.append((wpos, ix+1))
+                elif isinstance(seg, (str, Cat)):
+                    matched = self.match_segment(seg, pos)
+                    length = 1
+                elif isinstance(seg, list):  # Optional sequence
+                    matched, length = self.match_pattern(seg, pos, end)
                     stack.append((pos, ix+1))
-                    pos += length
-            elif seq[ix] in '**?':  # Wildcards
-                if '?' in seq[ix]:  # Non-greedy - advance ltr
-                    wrange = range(pos+1, end)
-                else:  # Greedy - advance rtl
-                    wrange = reversed(range(pos+1, end))
-                for wpos in wrange:
-                    wmatch, wlength = self.match_pattern(seq[ix+1:], wpos, end)
-                    if wmatch:  # We have a match at wpos
-                        # Match is valid if wildcard is extended, or if wildcard is unextended but not matching '#'
-                        if '**' in seq[ix] or '#' not in self[pos:wpos]:
-                            ix = len(seq) - 1  # This will cause the outer loop to terminate
-                            pos = wpos + wlength
-                            break
-                else:  # Match fails if we can't match the rest of the sequence
-                    matched = False
-            elif seq[ix] == '"':  # Ditto mark
-                if self[pos] == self[pos-1]:
-                    pos += 1
-                else:
-                    matched = False
-            elif self[pos] == seq[ix]:  # Grapheme
-                pos += 1
-            else:
-                matched = False
             if matched:
+                if isinstance(seg, Cat):
+                    catixes.append(seg.index(self[pos]))
                 ix += 1
+                pos += length
             elif stack:
                 pos, ix = stack.pop()  # Jump back to the last optional, and try again without it
             else:
@@ -315,20 +298,85 @@ class Word(list):
         else:
             return (True, pos-start) + ((catixes,) if return_cats else ())
         return (False, 0) + (([],) if return_cats else ())
+    
+    def rmatch_pattern(self, seq, start=None, end=None, return_cats=False):
+        '''Match a pattern sequence to the word.
         
-    def match_env(self, env, pos=0, tar=None):  # Test if the env matches the word
+        Return if the sequence matches the start of the given slice of the word, and how much of the word was matched.
+        
+        Arguments:
+            seq   -- the sequence being matched
+            start -- the index to begin matching from
+            end   -- the index to match until
+        
+        Returns a tuple.
+        '''
+        # Interpret start and end according to slice notation
+        if start is None:
+            start = 0
+        elif start < 0:
+            start += len(self)
+        if end is None:
+            end = len(self)
+        elif end < 0:
+            end += len(self)
+        stack = []  # This records the positions of matched optionals, if we need to jump back
+        catixes = []  # This records the index of each category match. Due to limitations, this doesn't include categories in optional sequences
+        pos = end - 1  # This keeps track of the position in the word, as it doesn't decrease linearly
+        ix = len(seq) - 1  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
+        while ix >= 0:
+            matched = False
+            if pos >= start:  # Still in the slice
+                seg = seq[ix]
+                if isinstance(seg, str) and seg in '**?':  # Wildcards
+                    # wrange will be reversed since we push to the stack in the reverse order to how we want to check
+                    if '?' in seg:  # Non-greedy - advance rtl
+                        wrange = range(start, pos)
+                    else:  # Greedy - advance ltr
+                        wrange = reversed(range(start, pos))
+                    for wpos in wrange:
+                        # Match is valid if wildcard is extended, or if wildcard is unextended but not matching '#'
+                        if '**' in seg or '#' not in self[wpos+1:pos+1]:
+                            stack.append((wpos, ix-1))
+                elif isinstance(seg, (str, Cat)):
+                    matched = self.match_segment(seg, pos)
+                    length = 1
+                elif isinstance(seg, list):  # Optional sequence
+                    matched, length = self.rmatch_pattern(seg, start, pos)
+                    stack.append((pos, ix-1))
+            if matched:
+                if isinstance(seg, Cat):
+                    catixes.append(seg.index(self[pos]))
+                ix -= 1
+                pos -= length
+            elif stack:
+                pos, ix = stack.pop()  # Jump back to the last optional, and try again without it
+            else:
+                break  # Total match failure
+        else:
+            return (True, end-pos) + ((catixes,) if return_cats else ())
+        return (False, 0) + (([],) if return_cats else ())
+    
+    def match_segment(self, seg, pos=0):
+        if seg == '"':  # Ditto mark
+            return (self[pos] == self[pos-1])
+        elif isinstance(seg, str):  # Grapheme
+            return (self[pos] == seg)
+        elif isinstance(seg, Cat):  # Category
+            return (self[pos] in seg)  # This may change if categories are allowed to contain sequences
+        
+    def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
         
         Arguments:
             env -- the environment to be matched (list)
             pos -- the index of the left edge of the target (int)
-            tar -- the target (list)
+            length -- the length of the target (int)
         
         Returns a bool
         '''
         env = env.copy()
-        if tar is None:
-            tar = []
+        tar = self[pos:pos+length]
         for j in range(len(env)):
             for i in reversed(range(len(env[j]))):
                 if env[j][i] == '%':
@@ -339,10 +387,10 @@ class Word(list):
             return env[0] in self
         else:
             if pos:
-                matchleft = self[::-1].match_pattern(env[0], -pos)[0]
+                matchleft = self.rmatch_pattern(env[0], pos-1)[0]
             else:  # At the left edge, which can only be matched by a null env
-                matchleft = -1 if env[0] else 0
-            matchright = self.match_pattern(env[1], pos+len(tar))[0]
+                matchleft = False if env[0] else True
+            matchright = self.match_pattern(env[1], pos+length)[0]
             return matchleft and matchright
 
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')

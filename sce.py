@@ -17,9 +17,6 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Check that tar still matches immediately before replacement (difficult)
-Move compiling code to own functions
-Is there a better name for Rule.else_?
 
 === Features ===
 Implement $ and syllables
@@ -28,8 +25,11 @@ Is it possible to implement a>b>c as notation for a chain shift?
 
 === Style ===
 Consider where to raise/handle exceptions
+Go over docstrings
 '''
 
+import re
+from collections import namedtuple
 from math import ceil
 from random import randint
 from core import LangException, Cat, Word, parse_syms, split
@@ -45,7 +45,7 @@ class WordUnchanged(LangException):
     '''Used to indicate that the word was not changed by the rule.'''
 
 # == Classes == #
-class Rule():
+class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     '''Class for representing a sound change rule.
     
     Instance variables:
@@ -54,7 +54,7 @@ class Rule():
         reps  -- replacement segments (list)
         envs  -- application environments (list)
         excs  -- exception environments (list)
-        else_ -- the rule to apply if an exception is satisfied (Rule)
+        otherwise -- the rule to apply if an exception is satisfied (Rule)
         flags -- flags for altering execution (dict)
     
     Methods:
@@ -62,98 +62,14 @@ class Rule():
         apply_match -- apply a single match to a word
     '''
         
-    __slots__ = ['rule', 'tars', 'reps', 'envs', 'excs', 'else_', 'flags']
-    
-    def __init__(self, rule='', cats=None):  # Format is tars>reps/envs!excs flag; envs, excs, and flag are all optional
-        '''Constructor for Rule
-        
-        Arguments:
-            rule -- the rule as a string (str)
-            cats -- dictionary of categories used to interpret the rule (dict)
-        '''
-        self.rule = rule
-        if ' ' in rule:
-            rule, flags = rule.split()
-        else:
-            flags = ''
-        if rule[0] == '+':
-            rule = '>'+rule[1:]
-        elif rule[0] == '-':
-            rule = rule[1:]
-        rule = rule.replace('>', ' >').replace('{ >', '{>').replace('/', ' /').replace('!', ' !').split(' ')
-        tars = rule.pop(0)
-        # We want to extract just the first iteration of (reps, envs, excs) and store everything else in else_
-        # To do this, we observe that if we fill in missing fields once we reach a later field, then if we hit
-        # a repeat (by seeing that the field variable is not None) we are in the second iteration. If there is
-        # no second iteration, else_ will be None.
-        reps = envs = excs = else_ = None
-        for i in range(len(rule)):
-            if rule[i][0] == '>' and reps is None:
-                reps = rule[i][1:]
-                continue
-            if rule[i][0] == '/' and envs is None:
-                envs = rule[i][1:]
-                if reps is None:
-                    reps = ''
-                continue
-            if rule[i][0] == '!' and excs is None:
-                excs = rule[i][1:]
-                if envs is None:
-                    envs = '_'
-                if reps is None:
-                    reps = ''
-                continue
-            else_ = rule[i:]
-            else_.insert(0, tars)
-        if reps is None:
-            reps = ''
-        if envs is None:
-            envs = '_'
-        if excs is None:
-            excs = ''
-        if cats is None:
-            cats = {}
-        self.tars = parse_field(tars, 'tars', cats)
-        self.reps = parse_field(reps, 'reps', cats)
-        self.envs = parse_field(envs, 'envs', cats)
-        self.excs = parse_field(excs, 'envs', cats)
-        self.flags = parse_flags(flags)
-        if not self.reps:
-            self.reps = [[]]
-        if len(self.reps) < len(self.tars):
-            self.reps *= ceil(len(self.tars)/len(self.reps))
-        if else_ is not None:
-            self.else_ = Rule(''.join(else_), cats)
-        else:
-            self.else_ = None
-        if self.flags['rtl']:
-            self.reverse()
-        return
+    __slots__ = ()
     
     def __repr__(self):
         return f"Rule('{self!s}')"
     
     def __str__(self):
         return self.rule
-    
-    def reverse(self):
-        for tar in self.tars:
-            tar.reverse()
-        for rep in self.reps:
-            rep.reverse()
-        for env in self.envs:
-            env.reverse()
-            env[0].reverse()
-            if len(env) == 2:
-                env[1].reverse()
-        for exc in self.excs:
-            exc.reverse()
-            exc[0].reverse()
-            if len(exc) == 2:
-                exc[1].reverse()
-        if self.else_ is not None:
-            self.else_.reverse()
-    
+        
     def apply(self, word):
         '''Apply the sound change rule to a single word.
         
@@ -164,8 +80,6 @@ class Rule():
         Raises WordUnchanged if the word was not changed by the rule.
         '''
         phones = tuple(word)
-        if self.flags['rtl']:
-            word = word[::-1]
         matches = []
         tars = self.tars
         if not tars:
@@ -196,17 +110,21 @@ class Rule():
                 del matches[i]
         reps.reverse()
         # Filter overlaps
-        i = 1  # This marks the match we're testing for overlapping the previous match
-        while i < len(matches):
-            if matches[i][0] < matches[i-1][0] + matches[i-1][1]:  # Overlap
-                del matches[i]
-                del reps[i]
-            else:
-                i += 1
+        if self.flags['rtl']:
+            for i in reversed(range(len(matches)-1)):
+                if matches[i][0] + matches[i][1] > matches[i+1][0]:
+                    del matches[i]
+                    del reps[i]
+        else:
+            i = 1  # This marks the match we're testing for overlapping the previous match
+            while i < len(matches):
+                if matches[i][0] < matches[i-1][0] + matches[i-1][1]:  # Overlap
+                    del matches[i]
+                    del reps[i]
+                else:
+                    i += 1
         for match, rep in sorted(zip(matches, reps), reverse=True):
             word = self.apply_match(match, rep, word)
-        if self.flags['rtl']:
-            word = word[::-1]
         if not reps:
             raise RuleFailed
         if phones == tuple(word):
@@ -215,15 +133,14 @@ class Rule():
     
     def check_match(self, match, word):
         pos, length = match[:2]
-        tar = word[pos:pos+length]
-        if self.excs and any(word.match_env(exc, pos, tar) for exc in self.excs):
-            if self.else_ is not None:  # Try checking else_
-                return self.else_.check_match(match, word)
-        elif any(word.match_env(env, pos, tar) for env in self.envs):
+        if self.excs and any(word.match_env(exc, pos, length) for exc in self.excs):
+            if self.otherwise is not None:  # Try checking otherwise
+                return self.otherwise.check_match(match, word)
+        elif any(word.match_env(env, pos, length) for env in self.envs):
             return True
         elif not self.excs:
-            if self.else_ is not None:  # Try checking else_
-                return self.else_.check_match(match, word)
+            if self.otherwise is not None:  # Try checking otherwise
+                return self.otherwise.check_match(match, word)
         return False
     
     def apply_match(self, match, rep, word):
@@ -316,7 +233,7 @@ def compile_ruleset(ruleset, cats=None):
         elif isinstance(rule, Rule):
             continue
         elif '>' in rule or rule[0] in '+-':  # Rule is a sound change
-            ruleset[i] = Rule(rule, cats)
+            ruleset[i] = compile_rule(rule, cats)
         else:  # Rule is a cat definition
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
@@ -330,6 +247,53 @@ def compile_ruleset(ruleset, cats=None):
         if ruleset[i] is None or ruleset[i].flags['ignore']:
             del ruleset[i]
     return ruleset
+
+def compile_rule(rule, cats=None):
+    '''Factory function for Rule objects
+        
+        Arguments:
+            rule -- the rule as a string (str)
+            cats -- dictionary of categories used to interpret the rule (dict)
+        '''
+        _rule = rule
+        rule = re.sub(r'\s*([>/!])\s*', r'\1', rule)
+        if ' ' in rule:
+            rule, flags = rule.rsplit(maxsplit=1)
+        else:
+            flags = ''
+        if rule.startswith('+'):
+            rule = '>' + rule.strip('+')
+        elif rule.startswith('-'):
+            rule = rule.strip('-')
+        tars, rule = re.sub(r'([^{])([>/!])', r'\1 \2', rule).split(maxsplit=1)
+        # If there is a > field, it will begin the rule, and there must always be a field before otherwise,
+        # so otherwise begins at the first non-initial >
+        pos = rule.find(' >', 1)
+        if pos != -1:
+            otherwise = Rule(tars + rule[pos:].replace(' ', ''), cats)
+            rule = rule[:pos].split()
+        else:
+            otherwise = None
+            rule = rule.split()
+        tars = parse_field(tars, 'tars', cats)
+        if rule and rule[0].startswith('>'):
+            reps = parse_field(rule.pop(0).strip('>'), 'reps', cats)
+        else:
+            reps = []
+        if rule and rule[0].startswith('/'):
+            envs = parse_field(rule.pop(0).strip('/'), 'envs', cats)
+        else:
+            envs = [[[], []]]
+        if rule and rule[0].startswith('!'):
+            excs = parse_field(rule.pop(0).strip('!'), 'envs', cats)
+        else:
+            excs = []
+        flags = parse_flags(flags)
+        if not reps:
+            reps = [[]]
+        if len(reps) < len(tars):
+            reps *= ceil(len(tars)/len(reps))
+        return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
     
 def parse_field(field, mode, cats=None):
     '''Parse a field of a sound change rule.
