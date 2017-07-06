@@ -90,7 +90,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             else:
                 tar, indices = [], ()
             _matches = []
-            for pos in range(len(word)):  # Find all matches
+            for pos in range(1, len(word)):  # Find all matches
                 match, length, catixes = word.match_pattern(tar, pos, return_cats=True)
                 if match:  # tar matches at pos
                     _matches.append((pos, length, catixes, i))
@@ -175,13 +175,13 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
                 matches = []
-                for wpos in range(len(word)):  # Find all matches
+                for wpos in range(1, len(word)):  # Find all matches
                     if any(word.match_env(env, wpos) for env in envs):
                         if mode == 'move' and wpos >= pos + length:  # We'll need to adjust the matches down
                             wpos -= length
                         matches.append(wpos)
             else:  # Indices
-                mode, matches = rep[0], list(rep[1])
+                mode, matches = rep[0], [match+1 for match in rep[1]]
             if mode == 'move':  # Move - delete original tar
                 word = word[:pos] + word[pos+length:]
             for match in sorted(matches, reverse=True):
@@ -250,50 +250,53 @@ def compile_ruleset(ruleset, cats=None):
 
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
-        
-        Arguments:
-            rule -- the rule as a string (str)
-            cats -- dictionary of categories used to interpret the rule (dict)
-        '''
-        _rule = rule
-        rule = re.sub(r'\s*([>/!])\s*', r'\1', rule)
-        if ' ' in rule:
-            rule, flags = rule.rsplit(maxsplit=1)
-        else:
-            flags = ''
-        if rule.startswith('+'):
-            rule = '>' + rule.strip('+')
-        elif rule.startswith('-'):
-            rule = rule.strip('-')
-        tars, rule = re.sub(r'([^{])([>/!])', r'\1 \2', rule).split(maxsplit=1)
-        # If there is a > field, it will begin the rule, and there must always be a field before otherwise,
-        # so otherwise begins at the first non-initial >
-        pos = rule.find(' >', 1)
-        if pos != -1:
-            otherwise = Rule(tars + rule[pos:].replace(' ', ''), cats)
-            rule = rule[:pos].split()
-        else:
-            otherwise = None
-            rule = rule.split()
-        tars = parse_field(tars, 'tars', cats)
-        if rule and rule[0].startswith('>'):
-            reps = parse_field(rule.pop(0).strip('>'), 'reps', cats)
-        else:
-            reps = []
-        if rule and rule[0].startswith('/'):
-            envs = parse_field(rule.pop(0).strip('/'), 'envs', cats)
-        else:
-            envs = [[[], []]]
-        if rule and rule[0].startswith('!'):
-            excs = parse_field(rule.pop(0).strip('!'), 'envs', cats)
-        else:
-            excs = []
-        flags = parse_flags(flags)
-        if not reps:
-            reps = [[]]
-        if len(reps) < len(tars):
-            reps *= ceil(len(tars)/len(reps))
-        return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
+    
+    Arguments:
+        rule -- the rule as a string (str)
+        cats -- dictionary of categories used to interpret the rule (dict)
+    '''
+    _rule = rule
+    rule = re.sub(r'\s*([>/!])\s*', r'\1', rule)
+    if ' ' in rule:
+        rule, flags = rule.rsplit(maxsplit=1)
+    else:
+        flags = ''
+    if rule.startswith('+'):
+        rule = '>' + rule.strip('+')
+    elif rule.startswith('-'):
+        rule = rule.strip('-')
+    tars, rule = re.sub(r'(?<!{)([>/!])', r' \1', rule).split(' ', maxsplit=1)
+    # If there is a > field, it will begin the rule, and there must always be a field before otherwise,
+    # so otherwise begins at the first non-initial >
+    pos = rule.find(' >', 1)
+    if pos != -1:
+        otherwise = Rule(tars + rule[pos:].replace(' ', ''), cats)
+        rule = rule[:pos].split()
+    else:
+        otherwise = None
+        rule = rule.split()
+    tars = parse_field(tars, 'tars', cats)
+    if rule and rule[0].startswith('>'):
+        if tars == [] and '@' in rule[0]:  # Indexed epenthesis
+            rule[0], indices = rule[0].split('@')
+            tars = parse_field('@'+indices, 'tars')
+        reps = parse_field(rule.pop(0).strip('>'), 'reps', cats)
+    else:
+        reps = []
+    if rule and rule[0].startswith('/'):
+        envs = parse_field(rule.pop(0).strip('/'), 'envs', cats)
+    else:
+        envs = [[[], []]]
+    if rule and rule[0].startswith('!'):
+        excs = parse_field(rule.pop(0).strip('!'), 'envs', cats)
+    else:
+        excs = []
+    flags = parse_flags(flags)
+    if not reps:
+        reps = [[]]
+    if len(reps) < len(tars):
+        reps *= ceil(len(tars)/len(reps))
+    return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
     
 def parse_field(field, mode, cats=None):
     '''Parse a field of a sound change rule.

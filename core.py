@@ -354,7 +354,7 @@ class Word(list):
             else:
                 break  # Total match failure
         else:
-            return (True, end-pos) + ((catixes,) if return_cats else ())
+            return (True, end-pos-1) + ((catixes,) if return_cats else ())
         return (False, 0) + (([],) if return_cats else ())
     
     def match_segment(self, seg, pos=0):
@@ -387,7 +387,7 @@ class Word(list):
             return env[0] in self
         else:
             if pos:
-                matchleft = self.rmatch_pattern(env[0], pos-1)[0]
+                matchleft = self.rmatch_pattern(env[0], 0, pos)[0]
             else:  # At the left edge, which can only be matched by a null env
                 matchleft = False if env[0] else True
             matchright = self.match_pattern(env[1], pos+length)[0]
