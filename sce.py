@@ -189,7 +189,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         return word
 
 # == Functions == #
-def parse_wordset(wordset, graphs=None):
+def parse_wordset(wordset, cats=None):
     '''Parses a wordlist.
     
     Arguments:
@@ -202,6 +202,10 @@ def parse_wordset(wordset, graphs=None):
         wordset = wordset.splitlines()
     else:
         wordset = wordset.copy()
+    if cats is not None and 'graphs' in cats:
+        graphs = cats['graphs']
+    else:
+        graphs = Cat("'")
     for i in reversed(range(len(wordset))):
         if wordset[i] == '':
             del wordset[i]
@@ -265,7 +269,10 @@ def compile_rule(rule, cats=None):
         rule = '>' + rule.strip('+')
     elif rule.startswith('-'):
         rule = rule.strip('-')
-    tars, rule = re.sub(r'(?<!{)([>/!])', r' \1', rule).split(' ', maxsplit=1)
+    if '>' in rule or '/' in rule or '!' in rule:
+        tars, rule = re.sub(r'(?<!{)([>/!])', r' \1', rule).split(' ', maxsplit=1)
+    else:
+        tars, rule = rule, ''
     # If there is a > field, it will begin the rule, and there must always be a field before otherwise,
     # so otherwise begins at the first non-initial >
     pos = rule.find(' >', 1)
@@ -317,7 +324,7 @@ def parse_field(field, mode, cats=None):
                 _field += parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats)
             elif '_' in env:
                 env = env.split('_')
-                env = [parse_syms(env[0], cats)[::-1], parse_syms(env[1], cats)]
+                env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
             else:
                 env = [parse_syms(env, cats)]
             _field.append(env)
@@ -369,7 +376,7 @@ def parse_flags(flags):
         _flags['age'] = MAX_RUNS
     return _flags
 
-def apply_ruleset(wordset, ruleset, graphs=None, cats=None, debug=False):
+def apply_ruleset(wordset, ruleset, cats=None, debug=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -379,7 +386,7 @@ def apply_ruleset(wordset, ruleset, graphs=None, cats=None, debug=False):
     
     Returns a list.
     '''
-    wordset = parse_wordset(wordset, graphs)
+    wordset = parse_wordset(wordset, cats)
     ruleset = compile_ruleset(ruleset, cats)
     rules = []  # We use a list to store rules, since they may be applied multiple times
     applied = [False]*len(wordset)  # For each word, we store a boolean noting whether a rule got applied or not
