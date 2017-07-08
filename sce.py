@@ -181,7 +181,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                             wpos -= length
                         matches.append(wpos)
             else:  # Indices
-                mode, matches = rep[0], [match+1 for match in rep[1]]
+                mode, matches = rep[0], rep[1]
             if mode == 'move':  # Move - delete original tar
                 word = word[:pos] + word[pos+length:]
             for match in sorted(matches, reverse=True):
@@ -238,7 +238,7 @@ def compile_ruleset(ruleset, cats=None):
             continue
         elif '>' in rule or rule[0] in '+-':  # Rule is a sound change
             ruleset[i] = compile_rule(rule, cats)
-        else:  # Rule is a cat definition
+        elif '=' in rule:  # Rule is a cat definition
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
             name, vals = rule.split(op)
@@ -246,6 +246,8 @@ def compile_ruleset(ruleset, cats=None):
             for cat in list(cats):  # Discard blank categories
                 if not cats[cat]:
                     del cats[cat]
+            ruleset[i] = None
+        else:
             ruleset[i] = None
     for i in reversed(range(len(ruleset))):
         if ruleset[i] is None or ruleset[i].flags['ignore']:
@@ -333,6 +335,7 @@ def parse_field(field, mode, cats=None):
             if '@' in tar:
                 tar, indices = tar.split('@')
                 indices = tuple(int(index) for index in split(indices, '|', minimal=True))
+                indices = tuple(index-(1 if index>0 else 0) for index in indices)
             else:
                 indices = ()
             tar = parse_syms(tar, cats)
