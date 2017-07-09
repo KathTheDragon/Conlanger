@@ -161,7 +161,8 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             ix = 0
             for i in range(len(rep)):
                 if isinstance(rep[i], Cat):
-                    rep[i] = rep[i][catixes[ix]]
+                    rep[i] = rep[i][catixes[ix] % len(rep[i])]
+                    ix = (ix + 1) % len(catixes)
                 elif rep[i] == '"':
                     rep[i] = rep[i-1]
             # Deal with target references
