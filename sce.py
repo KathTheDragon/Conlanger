@@ -243,7 +243,7 @@ def compile_ruleset(ruleset, cats=None):
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
             name, vals = rule.split(op)
-            exec(f'cats[name] {op} Cat(vals)')
+            exec(f'cats[name] {op} Cat(vals, cats)')
             for cat in list(cats):  # Discard blank categories
                 if not cats[cat]:
                     del cats[cat]

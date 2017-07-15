@@ -1,3 +1,5 @@
 __pycache__/
 langs/
 sce_tests/
+.idea/
+examples.py
