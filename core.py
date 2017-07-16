@@ -424,7 +424,7 @@ def parse_syms(syms, cats=None):
         elif syms[i][0] == '[':  # Category - parse to Cat
             syms[i] = syms[i].strip('[]')
             if ',' in syms[i]:  # Nonce cat
-                syms[i] = Cat(syms[i])
+                syms[i] = Cat(syms[i], cats)
             else:  # Named cat
                 syms[i] = cats[syms[i]]
         elif syms[i][0] == '{':  # Numbers - a few types of this
