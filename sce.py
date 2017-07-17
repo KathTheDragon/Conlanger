@@ -407,7 +407,7 @@ def parse_flags(flags):
         _flags['age'] = MAX_RUNS
     return _flags
 
-def apply_ruleset(wordset, ruleset, cats='', debug=False):
+def apply_ruleset(wordset, ruleset, cats='', debug=False, to_string=True):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -451,5 +451,7 @@ def apply_ruleset(wordset, ruleset, cats='', debug=False):
             rules[i].flags['age'] -= 1
             if rules[i].flags['age'] == 0:  # If the rule has 'expired', discard it
                 del rules[i]
+    if to_string:
+        wordset = '\n'.join([str(word) for word in wordset])
     return wordset
 
