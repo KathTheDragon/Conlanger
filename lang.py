@@ -20,8 +20,8 @@ Add generating every possible word/root
 Consider where to raise/handle exceptions
 '''
 
-from core import Cat, Config, parse_syms, split
-import gen
+from .core import Cat, Config, parse_syms, split
+import .gen
 
 # == Classes == #
 class Language():

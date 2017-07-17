@@ -32,7 +32,7 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from core import LangException, Cat, Word, parse_syms, split
+from .core import LangException, Cat, Word, parse_syms, split
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated

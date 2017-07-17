@@ -45,7 +45,7 @@ distribution with r-m bins, mode a/(1-c), and a rescaled variable x -> (x-c)/(1-
 second distribution.
 '''
 
-from core import LangException, Cat, Word
+from .core import LangException, Cat, Word
 from random import random, choice
 from math import log, floor, ceil
 
