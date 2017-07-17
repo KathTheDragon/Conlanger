@@ -190,6 +190,40 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         return word
 
 # == Functions == #
+def parse_cats(cats):
+    '''Parses a set of categories.
+    
+    Arguments:
+        cats -- the set of categories to be parsed (str)
+    
+    Returns a dict.
+    '''
+    if isinstance(cats, str):
+        cats = cats.splitlines()
+    else:
+        cats = cats.copy()
+    _cats = {}
+    if isinstance(cats, list):
+        for cat in cats:
+            if cat == '':
+                continue
+            else:
+                name, values = cat.split('=')
+                if name != '' and values != '':
+                    _cats[name] = Cat(values, cats)
+    else:
+        for cat in cats:
+            if cat == '':
+                continue
+            else:
+                if cats[cat] == '':
+                    continue
+                elif isinstance(cats[cat], Cat):
+                    _cats[cat] = cats[cat]
+                else:
+                    _cats[cat] = Cat(cats[cat])
+    return _cats
+
 def parse_wordset(wordset, cats=None):
     '''Parses a wordlist.
     
@@ -201,20 +235,19 @@ def parse_wordset(wordset, cats=None):
     '''
     if isinstance(wordset, str):
         wordset = wordset.splitlines()
-    else:
-        wordset = wordset.copy()
     if cats is not None and 'graphs' in cats:
         graphs = cats['graphs']
     else:
         graphs = Cat("'")
-    for i in reversed(range(len(wordset))):
-        if wordset[i] == '':
-            del wordset[i]
-        elif isinstance(wordset[i], Word):
+    _wordset = []
+    for word in wordset:
+        if word == '':
             continue
+        elif isinstance(word, Word):
+            _wordset.append(word)
         else:
-            wordset[i] = Word(wordset[i], graphs)
-    return wordset
+            _wordset.append(Word(word, graphs))
+    return _wordset
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
@@ -227,33 +260,27 @@ def compile_ruleset(ruleset, cats=None):
     '''
     if isinstance(ruleset, str):
         ruleset = ruleset.splitlines()
-    else:
-        ruleset = ruleset.copy()
     if cats is None:
         cats = {}
-    for i in range(len(ruleset)):
-        rule = ruleset[i].strip()
+    _ruleset = []
+    for rule in ruleset:
+        rule = rule.strip()
         if rule == '':
-            ruleset[i] = None
-        elif isinstance(rule, Rule):
             continue
+        elif isinstance(rule, Rule):
+            _ruleset.append(rule)
         elif '>' in rule or rule[0] in '+-':  # Rule is a sound change
-            ruleset[i] = compile_rule(rule, cats)
+            _ruleset.append(compile_rule(rule, cats))
         elif '=' in rule:  # Rule is a cat definition
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
             name, vals = rule.split(op)
-            exec(f'cats[name] {op} Cat(vals, cats)')
-            for cat in list(cats):  # Discard blank categories
-                if not cats[cat]:
-                    del cats[cat]
-            ruleset[i] = None
-        else:
-            ruleset[i] = None
-    for i in reversed(range(len(ruleset))):
-        if ruleset[i] is None or ruleset[i].flags['ignore']:
-            del ruleset[i]
-    return ruleset
+            if name != '':
+                exec(f'cats[name] {op} Cat(vals, cats)')
+                for cat in list(cats):  # Discard blank categories
+                    if not cats[cat]:
+                        del cats[cat]
+    return _ruleset
 
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
@@ -380,7 +407,7 @@ def parse_flags(flags):
         _flags['age'] = MAX_RUNS
     return _flags
 
-def apply_ruleset(wordset, ruleset, cats=None, debug=False):
+def apply_ruleset(wordset, ruleset, cats='', debug=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -390,6 +417,7 @@ def apply_ruleset(wordset, ruleset, cats=None, debug=False):
     
     Returns a list.
     '''
+    cats = parse_cats(cats)
     wordset = parse_wordset(wordset, cats)
     ruleset = compile_ruleset(ruleset, cats)
     rules = []  # We use a list to store rules, since they may be applied multiple times
