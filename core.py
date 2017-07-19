@@ -262,7 +262,7 @@ class Word(list):
             end = len(self)
         elif end < 0:
             end += len(self)
-        stack = []  # This records the positions of matched optionals, if we need to jump back
+        stack = []  # This stores the positions in the word and sequence that we may need to jump to
         catixes = []  # This records the index of each category match. Due to limitations, this doesn't include categories in optional sequences
         pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
         ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
@@ -284,8 +284,14 @@ class Word(list):
                     matched = self.match_segment(seg, pos)
                     length = 1
                 elif isinstance(seg, list):  # Optional sequence
-                    matched, length = self.match_pattern(seg, pos, end)
-                    stack.append((pos, ix+1))
+                    if seg[-1] == '?':  # Non-greedy
+                        seg = seg[:-1]
+                        stack.append((pos, ix))
+                        stack.append((pos, ix+len(seg)))
+                    else:  # Greedy
+                        stack.append((pos, ix+len(seg)))
+                        stack.append((pos, ix))
+                    seq = seq[:ix] + seg + seq[ix+1:]
                 elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions
                     stack.append((pos, ix-1))
                     matched = True
@@ -296,7 +302,7 @@ class Word(list):
                 ix += 1
                 pos += length
             elif stack:
-                pos, ix = stack.pop()  # Jump back to the last optional, and try again without it
+                pos, ix = stack.pop()
             else:
                 break  # Total match failure
         else:
@@ -324,7 +330,7 @@ class Word(list):
             end = len(self)
         elif end < 0:
             end += len(self)
-        stack = []  # This records the positions of matched optionals, if we need to jump back
+        stack = []  # This stores the positions in the word and sequence that we may need to jump to
         catixes = []  # This records the index of each category match. Due to limitations, this doesn't include categories in optional sequences
         pos = end - 1  # This keeps track of the position in the word, as it doesn't decrease linearly
         ix = len(seq) - 1  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
@@ -346,15 +352,25 @@ class Word(list):
                     matched = self.match_segment(seg, pos)
                     length = 1
                 elif isinstance(seg, list):  # Optional sequence
-                    matched, length = self.rmatch_pattern(seg, start, pos)
-                    stack.append((pos, ix-1))
+                    if seg[-1] == '?':  # Non-greedy
+                        seg = seg[:-1]
+                        stack.append((pos, ix))
+                        stack.append((pos, ix-len(seg)))
+                    else:  # Greedy
+                        stack.append((pos, ix-len(seg)))
+                        stack.append((pos, ix))
+                    seq = seq[:ix] + seg + seq[ix+1:]
+                elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions
+                    stack.append((pos, ix+1))
+                    matched = True
+                    length = 0
             if matched:
                 if isinstance(seg, Cat):
                     catixes.append(seg.index(self[pos]))
                 ix -= 1
                 pos -= length
             elif stack:
-                pos, ix = stack.pop()  # Jump back to the last optional, and try again without it
+                pos, ix = stack.pop()
             else:
                 break  # Total match failure
         else:
@@ -444,9 +460,13 @@ def parse_syms(syms, cats=None):
                 syms[i] = int(syms[i])
         else:  # Text - parse as word
             syms[i:i+1] = parse_word(syms[i], cats['graphs'])
-    for i in reversed(range(len(syms))):  # Second pass to evaluate repetitions
+    for i in reversed(range(len(syms))):  # Second pass to evaluate repetitions and ?
         if isinstance(syms[i], int):
             syms[i-1:i+1] = [syms[i-1]]*syms[i]
+        elif syms[i] == '?':
+            if isinstance(syms[i-1], list) and not isinstance(syms[i-1], Cat):  # Optional
+                syms[i-1].append('?')
+                del syms[i]
     return syms
 
 def parse_word(word, graphs=None):
