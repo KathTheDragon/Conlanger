@@ -286,6 +286,10 @@ class Word(list):
                 elif isinstance(seg, list):  # Optional sequence
                     matched, length = self.match_pattern(seg, pos, end)
                     stack.append((pos, ix+1))
+                elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions
+                    stack.append((pos, ix-1))
+                    matched = True
+                    length = 0
             if matched:
                 if isinstance(seg, Cat):
                     catixes.append(seg.index(self[pos]))
@@ -434,6 +438,8 @@ def parse_syms(syms, cats=None):
                 if syms[i][1] == '=' or op == '=':
                     op += '='
                 syms[i] = (op, int(syms[i].strip('=<>')))
+            elif syms[i].startswith('*'):  # Wildcard repetition - parse to tuple
+                syms[i] = (syms[i],)
             else:  # Repetitions - parse to int
                 syms[i] = int(syms[i])
         else:  # Text - parse as word

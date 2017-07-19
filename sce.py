@@ -241,6 +241,9 @@ def parse_wordset(wordset, cats=None):
         graphs = Cat("'")
     _wordset = []
     for word in wordset:
+        # Remove comments
+        word = word.split('//')[0].strip()
+        # Parse
         if word == '':
             continue
         elif isinstance(word, Word):
@@ -264,7 +267,9 @@ def compile_ruleset(ruleset, cats=None):
         cats = {}
     _ruleset = []
     for rule in ruleset:
-        rule = rule.strip()
+        # Remove comments
+        rule = rule.split('//')[0].strip()
+        # Compile
         if rule == '':
             continue
         elif isinstance(rule, Rule):
