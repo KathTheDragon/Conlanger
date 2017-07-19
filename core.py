@@ -263,7 +263,7 @@ class Word(list):
         elif end < 0:
             end += len(self)
         stack = []  # This stores the positions in the word and sequence that we may need to jump to
-        catixes = []  # This records the index of each category match. Due to limitations, this doesn't include categories in optional sequences
+        catixes = []  # This records the index of each category match. It may interact unexpectedly with optionals
         pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
         ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
         while ix < len(seq):
@@ -331,7 +331,7 @@ class Word(list):
         elif end < 0:
             end += len(self)
         stack = []  # This stores the positions in the word and sequence that we may need to jump to
-        catixes = []  # This records the index of each category match. Due to limitations, this doesn't include categories in optional sequences
+        catixes = []  # This records the index of each category match. It may interact unexpectedly with optionals
         pos = end - 1  # This keeps track of the position in the word, as it doesn't decrease linearly
         ix = len(seq) - 1  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
         while ix >= 0:
