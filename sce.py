@@ -242,7 +242,8 @@ def parse_wordset(wordset, cats=None):
     _wordset = []
     for word in wordset:
         # Remove comments
-        word = word.split('//')[0].strip()
+        if isinstance(word, str):
+            word = word.split('//')[0].strip()
         # Parse
         if word == '':
             continue
@@ -268,7 +269,8 @@ def compile_ruleset(ruleset, cats=None):
     _ruleset = []
     for rule in ruleset:
         # Remove comments
-        rule = rule.split('//')[0].strip()
+        if isinstance(rule, str):
+            rule = rule.split('//')[0].strip()
         # Compile
         if rule == '':
             continue
