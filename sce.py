@@ -314,7 +314,7 @@ def compile_rule(rule, cats=None):
     # so otherwise begins at the first non-initial >
     pos = rule.find(' >', 1)
     if pos != -1:
-        otherwise = Rule(tars + rule[pos:].replace(' ', ''), cats)
+        otherwise = compile_rule(tars + rule[pos:].replace(' ', ''), cats)
         rule = rule[:pos].split()
     else:
         otherwise = None
