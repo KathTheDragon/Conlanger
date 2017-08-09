@@ -19,11 +19,12 @@ Functions:
 === Implementation ===
 Investigate reindexing Word
 Break out format checking into separate functions
-I want to change supplying the actual syllable boundaries to Word to giving a syllabifier function - this is obviously language-dependent
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
 
 === Features ===
+Work on syllabification
+- lots of sub-steps here
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -40,11 +41,25 @@ class LangException(Exception):
 class FormatError(LangException):
     '''Exception raised for errors in formatting objects.'''
 
+# == Decorators == #
+# Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
+class lazy_property(object):
+    def __init__(self,fget):
+        self.fget = fget
+        self.func_name = fget.__name__
+
+    def __get__(self,obj,cls):
+        if obj is None:
+            return None
+        value = self.fget(obj)
+        setattr(obj,self.func_name,value)
+        return value
+    
 # == Classes == #
 class Cat(list):
     '''Represents a category of graphemes.'''
     
-    __slots__ = []
+    __slots__ = ()
     
     def __init__(self, values=None, cats=None):
         '''Constructor for Cat.
@@ -71,7 +86,11 @@ class Cat(list):
         list.__init__(self, _values)
     
     def __repr__(self):
-        return f"Cat('{self!s}')"
+        s = str(self)
+        if "'" not in s:
+            return f"Cat('{s}')"
+        else:
+            return f'Cat("{s}")'
     
     def __str__(self):
         return ', '.join(self)
@@ -89,18 +108,19 @@ class Word(list):
     '''Represents a word as a list of graphemes.
     
     Instance variables:
-        graphs    -- a list of graphemes (list)
-        syllables -- a list of tuples representing syllables (list)
+        graphs      -- a category of graphemes (Cat)
+        syllabifier -- a function that syllabifies the input word (Syllabifier)
     
     Methods:
-        find      -- match a list using pattern notation to the word
-        match_env -- match a sound change environment to the word
-        strip     -- remove leading and trailing graphemes
+        find          -- find a match of a list using pattern notation to the word
+        match_pattern -- match a list using pattern notation to the word
+        match_env     -- match a sound change environment to the word
+        strip         -- remove leading and trailing graphemes
     '''
     
-    __slots__ = ['graphs', 'syllables']
+    __slots__ = ('graphs', 'syllabifier')
     
-    def __init__(self, lexeme=None, graphs=None, syllables=None):
+    def __init__(self, lexeme=None, graphs=None, syllabifier=None):
         '''Constructor for Word
         
         Arguments:
@@ -122,9 +142,13 @@ class Word(list):
                 if lexeme[i-1] == lexeme[i] == '#':  # Make sure we don't have multiple adjacent '#'s
                     del lexeme[i]
         list.__init__(self, lexeme)
-        if syllables is None:
-            syllables = []
-        self.syllables = syllables  # Do a bit of sanity checking here
+        if syllabifier is None:
+            syllabifier = def_syllabifier
+        self.syllabifier = syllabifier
+    
+    @lazy_property
+    def syllables(self):
+        return self.syllabifier(self)
     
     def __repr__(self):
         return f"Word('{self!s}')"
@@ -146,7 +170,7 @@ class Word(list):
                 elif not any(test in poly for poly in polygraphs):
                     test = test[1:]  # Could still be ambiguous with something later
             word += graph
-        return word.strip(separator+'#').replace('#',' ')
+        return word.strip(separator+'#').replace('#', ' ')
     
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
@@ -156,7 +180,7 @@ class Word(list):
     
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return Word(list.__getitem__(self, item), self.graphs)
+            return Word(list.__getitem__(self, item), self.graphs, self.syllabifier)
         else:
             return list.__getitem__(self, item)
     
@@ -164,13 +188,17 @@ class Word(list):
     __delitem__ = None
     
     def __add__(self, other):
-        return Word(list(self) + list(other), self.graphs + other.graphs[1:], self.syllables + other.syllables)
+        if isinstance(other, Word):
+            graphs = self.graphs + other.graphs[1:]
+        else:
+            graphs = self.graphs
+        return Word(list(self) + list(other), graphs, self.syllabifier)
     
     def __mul__(self, other):
-        return Word(list(self) * other, self.graphs, self.syllables * other)
+        return Word(list(self) * other, self.graphs, self.syllabifier)
     
     def __rmul__(self, other):
-        return Word(list(self) * other, self.graphs, self.syllables * other)
+        return Word(list(self) * other, self.graphs, self.syllabifier)
     
     def __iadd__(*args):
         return NotImplemented
@@ -204,7 +232,7 @@ class Word(list):
                 break
         return self[start:end]
     
-    def find(self, sub, start=None, end=None, return_match=False):
+    def find(self, sub, start=None, end=None):
         '''Match a sequence using pattern notation to the word.
         
         Arguments:
@@ -214,176 +242,97 @@ class Word(list):
         
         Returns an int
         '''
-        # Interpret start and end according to slice notation
-        if start is None:
-            start = 0
-        elif start < 0:
-            start += len(self)
-        if end is None:
-            end = len(self)
-        elif end < 0:
-            end += len(self)
+        start, end = slice_indices(self, start, end)
         if isinstance(sub, Word):
-            sub = sub.strip()  # We want to strip out the leading and trailing '#'s so that this works like finding substrings
+            sub = sub.strip()  # We want to strip out '#'s at the edge so that this works like finding substrings
         if isinstance(sub[-1], tuple):  # Counting
             matches = 0
             op, count = sub[-1]
             for pos in range(start, end):
-                match, length = self.match_pattern(sub[:-1], pos, end)
+                match, length = self.match_pattern(sub[:-1], pos, end)[:2]
                 if match:
                     matches += 1
             if eval(f'matches {op} count'):
-                return (1, []) if return_match else 1
+                return 1
         else:
             for pos in range(start, end):
-                match, length = self.match_pattern(sub, pos, end)
+                match, length = self.match_pattern(sub, pos, end)[:2]
                 if match:
-                    return (pos-start, self[pos:pos+length]) if return_match else pos-start
-        return (-1, []) if return_match else -1
+                    return pos-start
+        return -1
     
-    def match_pattern(self, seq, start=None, end=None, return_cats=False):
+    def match_pattern(self, seq, start=None, end=None, step=1, pos=None, ix=None):
         '''Match a pattern sequence to the word.
         
-        Return if the sequence matches the start of the given slice of the word, and how much of the word was matched.
+        Return if the sequence matches the end of the given slice of the word, the length of the match, and category indexes.
         
         Arguments:
-            seq   -- the sequence being matched
-            start -- the index to begin matching from
-            end   -- the index to match until
+            seq -- the sequence being matched
+            start, end, step -- determine the slice of the word to match within
+            pos -- the initial position in the word
+            ix  -- the initial position in the sequence
         
         Returns a tuple.
         '''
-        # Interpret start and end according to slice notation
-        if start is None:
-            start = 0
-        elif start < 0:
-            start += len(self)
-        if end is None:
-            end = len(self)
-        elif end < 0:
-            end += len(self)
-        stack = []  # This stores the positions in the word and sequence that we may need to jump to
-        catixes = []  # This records the index of each category match. It may interact unexpectedly with optionals
-        pos = start  # This keeps track of the position in the word, as it doesn't increase linearly
-        ix = 0  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
-        while ix < len(seq):
+        start, end = slice_indices(self, start, end)
+        end = end-1
+        if pos is None:
+            pos = start if step > 0 else end
+        if ix is None:
+            ix = 0 if step > 0 else (len(seq) - 1)
+        ipos = pos  # We need the initial value of pos at the end for calculating match length
+        stack = []  # This stores the positions in the word and sequence that we branched at
+        catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
+        while 0 <= ix < len(seq):
             matched = False
-            if pos < end:  # Still in the slice
+            length = ilength = step
+            if start <= pos <= end:  # Still in the slice
                 seg = seq[ix]
-                if isinstance(seg, str) and seg in '**?':  # Wildcards
-                    # wrange will be reversed since we push to the stack in the reverse order to how we want to check
-                    if '?' in seg:  # Non-greedy - advance ltr
-                        wrange = reversed(range(pos+1, end))
-                    else:  # Greedy - advance rtl
-                        wrange = range(pos+1, end)
-                    for wpos in wrange:
-                        # wpos is valid if wildcard is extended, or if wildcard is unextended but not matching '#'
-                        if '**' in seg or '#' not in self[pos:wpos]:
-                            stack.append((wpos, ix+1))
-                elif isinstance(seg, (str, Cat)):
-                    matched = self.match_segment(seg, pos)
-                    length = 1
+                if isinstance(seg, str):
+                    if seg.startswith('*'):  # Wildcard
+                        wrange = range(pos+step, (end if step > 0 else start)+step, step)
+                        if '?' in seg:  # Non-greedy
+                            wrange = wrange[::-1]
+                        if '**' in seg:  # Extended
+                            for wpos in wrange:
+                                # wpos is always valid if wildcard is extended
+                                stack.append((wpos, ix+step))
+                        else:
+                            for wpos in wrange:
+                                # otherwise wpos is valid if not matching '#'
+                                if '#' not in self[pos:wpos:step]:
+                                    stack.append((wpos, ix+step))
+                    elif seg == '"':  # Ditto mark
+                        matched = self[pos] == self[pos-1]
+                    else:  # Grapheme
+                        matched = self[pos] == seg
+                elif isinstance(seg, Cat):  # Category
+                    if self[pos] in seg:  # This may change if categories are allowed to contain sequences
+                        matched = True
+                        catixes.append(seg.index(self[pos]))
                 elif isinstance(seg, list):  # Optional sequence
                     if seg[-1] == '?':  # Non-greedy
                         seg = seg[:-1]
                         stack.append((pos, ix))
-                        stack.append((pos, ix+len(seg)))
+                        ilength = len(seg)*step
                     else:  # Greedy
-                        stack.append((pos, ix+len(seg)))
-                        stack.append((pos, ix))
+                        stack.append((pos, ix+len(seg)*step))
+                        ilength = 0
                     seq = seq[:ix] + seg + seq[ix+1:]
-                elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions
-                    stack.append((pos, ix-1))
+                    matched = True
+                    length = 0
+                elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions; slight problem with rtl
+                    stack.append((pos, ix-step))
                     matched = True
                     length = 0
             if matched:
-                if isinstance(seg, Cat):
-                    catixes.append(seg.index(self[pos]))
-                ix += 1
+                ix += ilength
                 pos += length
-            elif stack:
+            elif stack:  # This segment failed to match, so we jump back to the next branch
                 pos, ix = stack.pop()
-            else:
-                break  # Total match failure
-        else:
-            return (True, pos-start) + ((catixes,) if return_cats else ())
-        return (False, 0) + (([],) if return_cats else ())
-    
-    def rmatch_pattern(self, seq, start=None, end=None, return_cats=False):
-        '''Match a pattern sequence to the word.
-        
-        Return if the sequence matches the start of the given slice of the word, and how much of the word was matched.
-        
-        Arguments:
-            seq   -- the sequence being matched
-            start -- the index to begin matching from
-            end   -- the index to match until
-        
-        Returns a tuple.
-        '''
-        # Interpret start and end according to slice notation
-        if start is None:
-            start = 0
-        elif start < 0:
-            start += len(self)
-        if end is None:
-            end = len(self)
-        elif end < 0:
-            end += len(self)
-        stack = []  # This stores the positions in the word and sequence that we may need to jump to
-        catixes = []  # This records the index of each category match. It may interact unexpectedly with optionals
-        pos = end - 1  # This keeps track of the position in the word, as it doesn't decrease linearly
-        ix = len(seq) - 1  # This keeps track of the position in the sequence, as it isn't necessarily monotonic
-        while ix >= 0:
-            matched = False
-            if pos >= start:  # Still in the slice
-                seg = seq[ix]
-                if isinstance(seg, str) and seg in '**?':  # Wildcards
-                    # wrange will be reversed since we push to the stack in the reverse order to how we want to check
-                    if '?' in seg:  # Non-greedy - advance rtl
-                        wrange = range(start, pos)
-                    else:  # Greedy - advance ltr
-                        wrange = reversed(range(start, pos))
-                    for wpos in wrange:
-                        # Match is valid if wildcard is extended, or if wildcard is unextended but not matching '#'
-                        if '**' in seg or '#' not in self[wpos+1:pos+1]:
-                            stack.append((wpos, ix-1))
-                elif isinstance(seg, (str, Cat)):
-                    matched = self.match_segment(seg, pos)
-                    length = 1
-                elif isinstance(seg, list):  # Optional sequence
-                    if seg[-1] == '?':  # Non-greedy
-                        seg = seg[:-1]
-                        stack.append((pos, ix))
-                        stack.append((pos, ix-len(seg)))
-                    else:  # Greedy
-                        stack.append((pos, ix-len(seg)))
-                        stack.append((pos, ix))
-                    seq = seq[:ix] + seg + seq[ix+1:]
-                elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions
-                    stack.append((pos, ix+1))
-                    matched = True
-                    length = 0
-            if matched:
-                if isinstance(seg, Cat):
-                    catixes.append(seg.index(self[pos]))
-                ix -= 1
-                pos -= length
-            elif stack:
-                pos, ix = stack.pop()
-            else:
-                break  # Total match failure
-        else:
-            return (True, end-pos-1) + ((catixes,) if return_cats else ())
-        return (False, 0) + (([],) if return_cats else ())
-    
-    def match_segment(self, seg, pos=0):
-        if seg == '"':  # Ditto mark
-            return (self[pos] == self[pos-1])
-        elif isinstance(seg, str):  # Grapheme
-            return (self[pos] == seg)
-        elif isinstance(seg, Cat):  # Category
-            return (self[pos] in seg)  # This may change if categories are allowed to contain sequences
+            else:  # Total match failure
+                return (False, 0, [])
+        return (True, (pos-ipos)*step, catixes)
         
     def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
@@ -407,15 +356,46 @@ class Word(list):
             return env[0] in self
         else:
             if pos:
-                matchleft = self.rmatch_pattern(env[0], 0, pos)[0]
+                matchleft = self.match_pattern(env[0], 0, pos, -1)[0]
             else:  # At the left edge, which can only be matched by a null env
                 matchleft = False if env[0] else True
             matchright = self.match_pattern(env[1], pos+length)[0]
             return matchleft and matchright
 
+class Syllabifier:
+    __slots__ = ('peaks',)
+    
+    def __init__(self, rules, peak_cats, cats):
+        self.peaks = Cat(peak_cats, cats)
+    
+    def __call__(self, word):
+        pass
+
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
 
 # == Functions == #
+def slice_indices(iter, start=None, end=None):
+    '''Calculate absolute indices from slice indices on an iterable.
+    
+    Arguments:
+        iter  -- the iterable being sliced
+        start -- the index of the start of the slice
+        end   -- the index of the end of the slice
+    
+    Returns a tuple of 2 ints.
+    '''
+    if start is None:
+        start = 0
+    elif start < 0:
+        start += len(iter)
+    if end is None:
+        end = len(iter)
+    elif end < 0:
+        end += len(iter)
+    return start, end
+
+def_syllabifier = lambda s: None  # Temporary
+
 def parse_syms(syms, cats=None):
     '''Parse a string using pattern notation.
     
@@ -469,13 +449,42 @@ def parse_syms(syms, cats=None):
                 del syms[i]
     return syms
 
+def parse_cats(cats):
+    '''Parses a set of categories.
+    
+    Arguments:
+        cats -- the set of categories to be parsed (str)
+    
+    Returns a dict.
+    '''
+    if isinstance(cats, str):
+        cats = cats.splitlines()
+    _cats = {}
+    if isinstance(cats, list):
+        for cat in cats:
+            if '=' in cat:
+                name, values = cat.split('=')
+                if name != '' and values != '':
+                    _cats[name] = Cat(values, cats)
+    elif isinstance(cats, dict):
+        for cat in cats:
+            if cat == '' or not cats[cat]:
+                continue
+            elif isinstance(cats[cat], Cat):
+                _cats[cat] = cats[cat]
+            else:
+                _cats[cat] = Cat(cats[cat])  # meow
+    for cat in list(_cats):  # Discard blank categories
+        if not _cats[cat]:
+            del _cats[cat]
+    return _cats
+
 def parse_word(word, graphs=None):
     '''Parse a string of graphemes.
     
     Arguments:
-        word       -- the word to be parsed (str)
-        separator  -- disambiguation character (str)
-        polygraphs -- list of polygraphs (list)
+        word   -- the word to be parsed (str)
+        graphs -- category of graphemes (Cat)
     
     Returns a list.
     '''

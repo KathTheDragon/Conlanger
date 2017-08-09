@@ -11,7 +11,6 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Work out where the cat parsing code is going
 
 === Features ===
 Add generating every possible word/root
@@ -20,11 +19,11 @@ Add generating every possible word/root
 Consider where to raise/handle exceptions
 '''
 
-from .core import Cat, Config, parse_syms, split
-import .gen
+from .core import Cat, Config, parse_syms, parse_cats, split
+from . import gen, sce
 
 # == Classes == #
-class Language():
+class Language:
     '''Class for representing a single language.
     
     Instance variables:
@@ -34,55 +33,41 @@ class Language():
         rootConfig  -- root configuration data (Config)
         patternFreq -- drop-off frequency for patterns (float)
         graphFreq   -- drop-off frequency for graphemes (float)
+        syllabifier -- syllabification function (Syllabifier)
     
     Methods:
         parse_patterns -- parse a string denoting generation patterns
         gen_word       -- generate words
         gen_root       -- generate roots
+        apply_ruleset  -- apply a sound change ruleset to a wordset
     '''
     
-    def __init__(self, name='', cats=None, wordConfig=None, rootConfig=None, patternFreq=0, graphFreq=0):
+    def __init__(self, name='', cats=None, word_config=None, root_config=None, pattern_freq=0, graph_freq=0, syllabifier=None):
         '''Constructor for Language().
         
         Arguments:
             name        -- language name (str)
             cats        -- grapheme categories (dict)
-            wordConfig  -- word configuration data (Config)
-            rootConfig  -- root configuration data (Config)
-            patternFreq -- drop-off frequency for patterns (float)
-            graphFreq   -- drop-off frequency for graphemes (float)
+            word_config  -- word configuration data (Config)
+            root_config  -- root configuration data (Config)
+            pattern_freq -- drop-off frequency for patterns (float)
+            graph_freq   -- drop-off frequency for graphemes (float)
         '''
         self.name = name
-        if cats is None:
-            self.cats = {}
+        self.cats = parse_cats(cats)
+        if 'graphs' not in self.cats:  # Category 'graphs' must exist
+            self.cats['graphs'] = Cat("'")
+        if word_config is None:
+            self.word_config = Config([], range(0), [], 0, 0)
         else:
-            self.cats = cats
-        # Need to keep this but not sure where exactly it's being moved to
-        # cats = cats.replace('|',' ').split()
-        # for cat in cats:
-            # name, vals = cat.split('=')
-            # vals = vals.replace(',',' ').split()
-            # if not vals:  # This would yield an empty cat
-                # continue
-            # for i in range(len(vals)):
-                # if '[' in vals[i]:  # This is another category
-                    # vals[i] = self.cats[vals[i][1:-1]]
-            # self.cats[name] = Cat(vals)
-        # if 'graphs' not in self.cats or not self.cats['graphs']:  # Category 'graphs' must exist and contain at least one character
-            # self.cats['graphs'] = Cat("'")
-        # for cat in self.cats.keys():  # Discard blank categories
-            # if not self.cats[cat]:
-                # del self.cats[cat]
-        if wordConfig is None:
-            self.wordConfig = Config([], range(0), [], 0, 0)
+            self.word_config = word_config
+        if root_config is None:
+            self.root_config = Config([], range(0), [], 0, 0)
         else:
-            self.wordConfig = wordConfig
-        if rootConfig is None:
-            self.rootConfig = Config([], range(0), [], 0, 0)
-        else:
-            self.rootConfig = rootConfig
-        self.patternFreq = patternFreq
-        self.graphFreq = graphFreq
+            self.root_config = root_config
+        self.pattern_freq = pattern_freq
+        self.graph_freq = graph_freq
+        self.syllabifier = syllabifier
     
     def parse_patterns(self, patterns):
         '''Parses generation patterns.
@@ -120,12 +105,24 @@ class Language():
         
         Returns a list
         '''
-        if num == 0:  # Generate every possible word, unimplemented
+        if num == 0:  # Generate every possible root, unimplemented
             return []
         results = []
         for i in range(num):
             results.append(gen.gen_root(self))
         return results
+    
+    def apply_ruleset(self, wordset, ruleset, to_string=True):
+        '''Runs the sound change 'ruleset' on the 'wordset'.
+        
+        Arguments:
+            wordset   -- the words to be changed (str, list)
+            ruleset   -- the sound changes to apply (str, list)
+            to_string -- whether or not to have string output
+        
+        Returns a str or list
+        '''
+        return sce.apply_ruleset(wordset, ruleset, self.cats, self.syllabifier, False, to_string)
 
 # == Functions == #
 def load_lang(name):
@@ -140,11 +137,11 @@ def load_lang(name):
         data = list(f)
     name = data[0].strip()
     cats = eval(data[1].strip())
-    wordConfig = eval(data[2].strip())
-    rootConfig = eval(data[3].strip())
-    patternFreq = eval(data[4].strip())
-    graphFreq = eval(data[5].strip())
-    return Language(name, cats, wordConfig, rootConfig, patternFreq, graphFreq)
+    word_config = eval(data[2].strip())
+    root_config = eval(data[3].strip())
+    pattern_freq = eval(data[4].strip())
+    graph_freq = eval(data[5].strip())
+    return Language(name, cats, word_config, root_config, pattern_freq, graph_freq)
 
 def save_lang(lang):
     '''Saves a language to file.
@@ -154,11 +151,11 @@ def save_lang(lang):
     '''
     name = lang.name
     cats = str(lang.cats)
-    wordConfig = str(lang.wordConfig)
-    rootConfig = str(lang.rootConfig)
-    patternFreq = str(lang.patternFreq)
-    graphFreq = str(lang.graphFreq)
-    data = '\n'.join([name, cats, wordConfig, rootConfig, patternFreq, graphFreq])
+    word_config = str(lang.wordConfig)
+    root_config = str(lang.rootConfig)
+    pattern_freq = str(lang.patternFreq)
+    graph_freq = str(lang.graphFreq)
+    data = '\n'.join([name, cats, word_config, root_config, pattern_freq, graph_freq])
     with open('langs/{}.dat'.format(name.lower()), 'w', encoding='utf-8') as f:
         f.write(data)
 

@@ -17,11 +17,13 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
+Overhaul apply_ruleset
 
 === Features ===
 Implement $ and syllables
 Implement additional logic options for environments
 Is it possible to implement a>b>c as notation for a chain shift?
+Implement meta-rules for flow control
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -32,7 +34,7 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from .core import LangException, Cat, Word, parse_syms, split
+from .core import LangException, Cat, Word, parse_syms, parse_cats, split
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -83,15 +85,17 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         matches = []
         tars = self.tars
         if not tars:
-            tars = [([], ())]
+            tars = [[]]
         for i in range(len(tars)):
-            if tars[i]:
+            if isinstance(tars[i], tuple):
                 tar, indices = tars[i]
+            elif isinstance(tars[i], list):
+                tar, indices = tars[i], ()
             else:
                 tar, indices = [], ()
             _matches = []
             for pos in range(1, len(word)):  # Find all matches
-                match, length, catixes = word.match_pattern(tar, pos, return_cats=True)
+                match, length, catixes = word.match_pattern(tar, pos)
                 if match:  # tar matches at pos
                     _matches.append((pos, length, catixes, i))
             # Filter only those matches selected by the given indices
@@ -101,7 +105,6 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 matches += [_matches[ix] for ix in indices]
         # Filter only those matches that fit the environment - also record the corresponding replacement
         reps = []
-        i = 0
         for i in reversed(range(len(matches))):
             if self.check_match(matches[i], word):
                 # Save the appropriate rep
@@ -171,7 +174,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                     rep[i:i+1] = tar
                 elif rep[i] == '<':  # Target reversal/metathesis
                     rep[i:i+1] = reversed(tar)
-            word = word[:pos] + Word(rep) + word[pos+length:]
+            word = word[:pos] + rep + word[pos+length:]
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
@@ -190,41 +193,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         return word
 
 # == Functions == #
-def parse_cats(cats):
-    '''Parses a set of categories.
-    
-    Arguments:
-        cats -- the set of categories to be parsed (str)
-    
-    Returns a dict.
-    '''
-    if isinstance(cats, str):
-        cats = cats.splitlines()
-    else:
-        cats = cats.copy()
-    _cats = {}
-    if isinstance(cats, list):
-        for cat in cats:
-            if cat == '':
-                continue
-            else:
-                name, values = cat.split('=')
-                if name != '' and values != '':
-                    _cats[name] = Cat(values, cats)
-    else:
-        for cat in cats:
-            if cat == '':
-                continue
-            else:
-                if cats[cat] == '':
-                    continue
-                elif isinstance(cats[cat], Cat):
-                    _cats[cat] = cats[cat]
-                else:
-                    _cats[cat] = Cat(cats[cat])
-    return _cats
-
-def parse_wordset(wordset, cats=None):
+def parse_wordset(wordset, cats=None, syllabifier=None):
     '''Parses a wordlist.
     
     Arguments:
@@ -250,7 +219,7 @@ def parse_wordset(wordset, cats=None):
         elif isinstance(word, Word):
             _wordset.append(word)
         else:
-            _wordset.append(Word(word, graphs))
+            _wordset.append(Word(word, graphs, syllabifier))
     return _wordset
 
 def compile_ruleset(ruleset, cats=None):
@@ -297,7 +266,7 @@ def compile_rule(rule, cats=None):
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
     _rule = rule
-    rule = re.sub(r'\s*([>/!])\s*', r'\1', rule)
+    rule = re.sub(r'\s*([>/!:;])\s*', r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
     else:
@@ -320,8 +289,10 @@ def compile_rule(rule, cats=None):
         otherwise = None
         rule = rule.split()
     tars = parse_field(tars, 'tars', cats)
+    if not tars:
+        tars = [[]]
     if rule and rule[0].startswith('>'):
-        if tars == [] and '@' in rule[0]:  # Indexed epenthesis
+        if tars == [[]] and '@' in rule[0]:  # Indexed epenthesis
             rule[0], indices = rule[0].split('@')
             tars = parse_field('@'+indices, 'tars')
         reps = parse_field(rule.pop(0).strip('>'), 'reps', cats)
@@ -355,26 +326,17 @@ def parse_field(field, mode, cats=None):
     if cats is None:
         cats = {}
     _field = []
-    if mode == 'envs':
-        for env in split(field, '|', minimal=True):
-            if env.startswith('~'):  # ~X is equivalent to X_,_X
-                _field += parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats)
-            elif '_' in env:
-                env = env.split('_')
-                env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
-            else:
-                env = [parse_syms(env, cats)]
-            _field.append(env)
-    elif mode == 'tars':
+    if mode == 'tars':
         for tar in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
             if '@' in tar:
                 tar, indices = tar.split('@')
                 indices = tuple(int(index) for index in split(indices, '|', minimal=True))
-                indices = tuple(index-(1 if index>0 else 0) for index in indices)
+                indices = tuple(index-(1 if index > 0 else 0) for index in indices)
             else:
                 indices = ()
             tar = parse_syms(tar, cats)
-            tar = (tar, indices)
+            if indices:
+                tar = (tar, indices)
             _field.append(tar)
     elif mode == 'reps':
         for rep in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
@@ -391,6 +353,16 @@ def parse_field(field, mode, cats=None):
             else:  # Replace rule
                 rep = parse_syms(rep, cats)
             _field.append(rep)
+    elif mode == 'envs':
+        for env in split(field, '|', minimal=True):
+            if env.startswith('~'):  # ~X is equivalent to X_|_X
+                _field += parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats)
+            elif '_' in env:
+                env = env.split('_')
+                env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
+            else:
+                env = [parse_syms(env, cats)]
+            _field.append(env)
     return _field
 
 def parse_flags(flags):
@@ -401,43 +373,56 @@ def parse_flags(flags):
         
     Returns a dictionary.
     '''
-    _flags = dict(ignore=0, ditto=0, stop=0, rtl=0, repeat=1, age=1, chance=100)  # Default values
+    _flags = dict(ignore=0, ditto=0, stop=0, rtl=0, repeat=1, age=1, delay=0, chance=100)  # Default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
             _flags[flag] = int(arg)
         else:
             _flags[flag] = 1-_flags[flag]
-    if not 0 < _flags['repeat'] <= MAX_RUNS:
-        _flags['repeat'] = MAX_RUNS
-    if not 0 < _flags['age'] <= MAX_RUNS:
-        _flags['age'] = MAX_RUNS
+    # Validate values
+    # Binary flags
+    for flag in ('ignore', 'ditto', 'stop', 'rtl'):
+        if not 0 <= _flags[flag] <= 1:
+            _flags[flag] = 0
+    # Unbounded flags
+    for flag in ('repeat', 'age'):
+        if not 1 <= _flags[flag] <= MAX_RUNS:
+            _flags[flag] = MAX_RUNS
+    # Value flags
+    if not 0 <= _flags['delay'] <= MAX_RUNS:
+        _flags['delay'] = 0
+    if not 0 <= _flags['chance'] <= 100:
+        _flags['chance'] = 100
     return _flags
 
-def apply_ruleset(wordset, ruleset, cats='', debug=False, to_string=True):
+def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=True):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
-        wordset -- the words to which the rules are to be applied (list)
-        ruleset -- the rules which are to be applied to the words (list)
-        cats    -- the initial categories to be used in ruleset compiling (dict)
+        wordset     -- the words to which the rules are to be applied (list)
+        ruleset     -- the rules which are to be applied to the words (list)
+        cats        -- the initial categories to be used in ruleset compiling (dict)
+        syllabifier -- the syllabifier function to use for syllabifying words (Syllabifier)
+        debug       -- whether to output debug messages or not
+        to_string   -- whether to give a string or list output
     
-    Returns a list.
+    Returns a str or list.
     '''
     cats = parse_cats(cats)
-    wordset = parse_wordset(wordset, cats)
+    wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
     rules = []  # We use a list to store rules, since they may be applied multiple times
     applied = [False]*len(wordset)  # For each word, we store a boolean noting whether a rule got applied or not
-    for rule in ruleset:
-        rules.append(rule)
+    for _rule in ruleset:
+        rules.append(_rule)
         if debug:
             print('Words =', [str(word) for word in wordset])  # For debugging
         for i in range(len(wordset)):
-            if applied[i] is not None:  # We stopped execution for this word
+            if applied[i] is not None:  # Have we stopped execution for this word?
                 for rule in reversed(rules):
-                    # Either the rule isn't marked 'ditto', or it is and the last rule ran
-                    if not rule.flags['ditto'] or applied[i]:
+                    # Either the rule isn't delayed, it isn't marked 'ditto', or it is and the last rule ran
+                    if not rule.flags['delay'] or not rule.flags['ditto'] or applied[i]:
                         if debug:
                             print('rule =', rule)  # For debugging
                         applied[i] = None if rule.flags['stop'] else True
