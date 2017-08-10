@@ -192,6 +192,47 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 word = word[:match] + tar + word[match:]
         return word
 
+class RuleBlock(list):
+    '''Groups a block of sound changes together.
+    
+    Instance variables:
+        flags -- flags for altering execution (dict)
+    '''
+    
+    __slots__ = ('flags',)
+    
+    def __init__(self, ruleset, flags):
+        self.flags = flags
+        list.__init__(self, ruleset)
+    
+    def apply(self, word):
+        applied = False
+        rules = []  # We use a list to store rules, since they may be applied multiple times
+        for _rule in self:
+            rules.append(_rule)
+            for rule in reversed(rules):
+                flags = rule.flags
+                if not flags['ditto'] or (flags['ditto'] != 1)^applied:
+                    for j in range(flags['repeat']):
+                        if randint(1, 100) <= flags['chance']:
+                            applied = True
+                            try:
+                                word = rule.apply(word)
+                            except RuleFailed:  # The rule didn't apply, make note of this
+                                applied = False
+                                break
+                            except WordUnchanged:  # If the word didn't change, stop applying
+                                break
+                        else:
+                            applied = False
+                    if flags['stop'] and (flags['stop'] != 1)^applied:
+                        return word
+            for i in reversed(range(len(rules))):
+                rules[i].flags['for'] -= 1
+                if rules[i].flags['for'] == 0:  # If the rule has 'expired', discard it
+                    del rules[i]
+        return word
+
 # == Functions == #
 def parse_wordset(wordset, cats=None, syllabifier=None):
     '''Parses a wordlist.
@@ -256,7 +297,29 @@ def compile_ruleset(ruleset, cats=None):
                 for cat in list(cats):  # Discard blank categories
                     if not cats[cat]:
                         del cats[cat]
-    return _ruleset
+        elif rule.startswith('!'):  # Meta-rule
+            _ruleset.append(rule.strip('!'))
+    # Second pass to create blocks
+    for i in reversed(range(len(_ruleset))):
+        if isinstance(_ruleset[i], str):
+            rule = _ruleset[i]
+            rule = re.sub(r'\s*([:;])\s*', r'\1', rule)
+            if ' ' in rule:
+                rule, flags = rule.split()
+            else:
+                flags = ''
+            flags = parse_flags(flags)
+            if ':' in rule:
+                rule, arg = rule.split(':')
+                arg = int(arg)
+            else:
+                arg = 0
+            if rule == 'block':
+                if arg:
+                    _ruleset[i:i+arg+1] = RuleBlock(_ruleset[i+1:i+arg+1], flags)
+                else:
+                    _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
+    return RuleBlock(_ruleset, None)
 
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
@@ -266,7 +329,8 @@ def compile_rule(rule, cats=None):
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
     _rule = rule
-    rule = re.sub(r'\s*([>/!:;])\s*', r'\1', rule)
+    rule = re.sub(r'\s+([>/!])\s+', r'\1', rule)
+    rule = re.sub(r'([:;])\s*', r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
     else:
@@ -373,25 +437,31 @@ def parse_flags(flags):
         
     Returns a dictionary.
     '''
-    _flags = dict(ignore=0, ditto=0, stop=0, rtl=0, repeat=1, age=1, delay=0, chance=100)  # Default values
+    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
             _flags[flag] = int(arg)
         else:
-            _flags[flag] = 1-_flags[flag]
+            if flag.startswith('!'):
+                flag = flag.strip('!')
+                _flags[flag] = _flags[flag]-1
+            else:
+                _flags[flag] = 1-_flags[flag]
     # Validate values
     # Binary flags
-    for flag in ('ignore', 'ditto', 'stop', 'rtl'):
+    for flag in ('ignore', 'rtl'):
         if not 0 <= _flags[flag] <= 1:
             _flags[flag] = 0
+    # Ternary flags
+    for flag in ('ditto', 'stop'):
+        if not -1 <= _flags[flag] <= 1:
+            _flags[flag] = 0
     # Unbounded flags
-    for flag in ('repeat', 'age'):
+    for flag in ('repeat', 'for'):
         if not 1 <= _flags[flag] <= MAX_RUNS:
             _flags[flag] = MAX_RUNS
     # Value flags
-    if not 0 <= _flags['delay'] <= MAX_RUNS:
-        _flags['delay'] = 0
     if not 0 <= _flags['chance'] <= 100:
         _flags['chance'] = 100
     return _flags
@@ -401,7 +471,7 @@ def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_s
     
     Arguments:
         wordset     -- the words to which the rules are to be applied (list)
-        ruleset     -- the rules which are to be applied to the words (list)
+        ruleset     -- the rules which are to be applied to the words (RuleBlock)
         cats        -- the initial categories to be used in ruleset compiling (dict)
         syllabifier -- the syllabifier function to use for syllabifying words (Syllabifier)
         debug       -- whether to output debug messages or not
@@ -412,37 +482,7 @@ def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_s
     cats = parse_cats(cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
-    rules = []  # We use a list to store rules, since they may be applied multiple times
-    applied = [False]*len(wordset)  # For each word, we store a boolean noting whether a rule got applied or not
-    for _rule in ruleset:
-        rules.append(_rule)
-        if debug:
-            print('Words =', [str(word) for word in wordset])  # For debugging
-        for i in range(len(wordset)):
-            if applied[i] is not None:  # Have we stopped execution for this word?
-                for rule in reversed(rules):
-                    # Either the rule isn't delayed, it isn't marked 'ditto', or it is and the last rule ran
-                    if not rule.flags['delay'] or not rule.flags['ditto'] or applied[i]:
-                        if debug:
-                            print('rule =', rule)  # For debugging
-                        applied[i] = None if rule.flags['stop'] else True
-                        for j in range(rule.flags['repeat']):
-                            try:
-                                if randint(1, 100) <= rule.flags['chance']:
-                                    wordset[i] = rule.apply(wordset[i])
-                                else:
-                                    applied[i] = False
-                            except RuleFailed:  # The rule didn't apply, make note of this
-                                applied[i] = False
-                                break
-                            except WordUnchanged:  # If the word didn't change, stop applying
-                                break
-                        if applied[i] is None:
-                            break
-        for i in reversed(range(len(rules))):
-            rules[i].flags['age'] -= 1
-            if rules[i].flags['age'] == 0:  # If the rule has 'expired', discard it
-                del rules[i]
+    wordset = [ruleset.apply(word) for word in wordset]
     if to_string:
         wordset = '\n'.join([str(word) for word in wordset])
     return wordset
