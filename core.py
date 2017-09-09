@@ -43,16 +43,16 @@ class FormatError(LangException):
 
 # == Decorators == #
 # Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
-class lazy_property(object):
-    def __init__(self,fget):
+class lazyproperty(object):
+    def __init__(self, fget):
         self.fget = fget
         self.func_name = fget.__name__
 
-    def __get__(self,obj,cls):
+    def __get__(self, obj, cls):
         if obj is None:
             return None
         value = self.fget(obj)
-        setattr(obj,self.func_name,value)
+        setattr(obj, self.func_name, value)
         return value
     
 # == Classes == #
@@ -115,6 +115,7 @@ class Word(list):
         find          -- find a match of a list using pattern notation to the word
         match_pattern -- match a list using pattern notation to the word
         match_env     -- match a sound change environment to the word
+        apply_match   -- apply a single match to the word
         strip         -- remove leading and trailing graphemes
     '''
     
@@ -146,7 +147,7 @@ class Word(list):
             syllabifier = def_syllabifier
         self.syllabifier = syllabifier
     
-    @lazy_property
+    @lazyproperty
     def syllables(self):
         return self.syllabifier(self)
     
@@ -331,15 +332,15 @@ class Word(list):
             elif stack:  # This segment failed to match, so we jump back to the next branch
                 pos, ix = stack.pop()
             else:  # Total match failure
-                return (False, 0, [])
-        return (True, (pos-ipos)*step, catixes)
+                return False, 0, []
+        return True, (pos-ipos)*step, catixes
         
     def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
         
         Arguments:
-            env -- the environment to be matched (list)
-            pos -- the index of the left edge of the target (int)
+            env    -- the environment to be matched (list)
+            pos    -- the index of the left edge of the target (int)
             length -- the length of the target (int)
         
         Returns a bool
@@ -361,6 +362,54 @@ class Word(list):
                 matchleft = False if env[0] else True
             matchright = self.match_pattern(env[1], pos+length)[0]
             return matchleft and matchright
+    
+    def apply_match(self, match, rep):
+        '''Apply a replacement to a word
+        
+        Arguments:
+            match -- the match to be used
+            rep   -- the replacement to be used
+            word  -- the word to be changed
+        
+        Returns a Word.
+        '''
+        pos, length, catixes = match[:3]
+        tar = self[pos:pos+length]
+        if isinstance(rep, list):  # Replacement
+            rep = rep.copy()
+            # Deal with categories and ditto marks
+            ix = 0
+            for i in range(len(rep)):
+                if isinstance(rep[i], Cat):
+                    rep[i] = rep[i][catixes[ix] % len(rep[i])]
+                    ix = (ix + 1) % len(catixes)
+                elif rep[i] == '"':
+                    rep[i] = rep[i-1]
+            # Deal with target references
+            for i in reversed(range(len(rep))):
+                if rep[i] == '%':  # Target copying
+                    rep[i:i+1] = tar
+                elif rep[i] == '<':  # Target reversal/metathesis
+                    rep[i:i+1] = reversed(tar)
+            word = self[:pos] + rep + self[pos+length:]
+        else:  # Movement
+            if isinstance(rep[1], list):  # Environment
+                mode, envs = rep
+                matches = []
+                for wpos in range(1, len(self)):  # Find all matches
+                    if any(self.match_env(env, wpos) for env in envs):
+                        if mode == 'move' and wpos >= pos + length:  # We'll need to adjust the matches down
+                            wpos -= length
+                        matches.append(wpos)
+            else:  # Indices
+                mode, matches = rep[0], rep[1]
+            if mode == 'move':  # Move - delete original tar
+                word = self[:pos] + self[pos+length:]
+            else:
+                word = self[:]
+            for match in sorted(matches, reverse=True):
+                word = word[:match] + tar + word[match:]
+        return word
 
 class Syllabifier:
     __slots__ = ('peaks',)
@@ -494,7 +543,6 @@ def parse_word(word, graphs=None):
     #         Does test begin with a valid graph? Single characters are always valid
     #             Add this valid graph to the output
     #             Remove the graph from test, and remove leading instances of separator
-    #     End
     test = ''
     if graphs is None:
         graphs = ["'"]

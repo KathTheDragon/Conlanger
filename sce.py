@@ -23,7 +23,6 @@ Overhaul apply_ruleset
 Implement $ and syllables
 Implement additional logic options for environments
 Is it possible to implement a>b>c as notation for a chain shift?
-Implement meta-rules for flow control
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -51,17 +50,17 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     '''Class for representing a sound change rule.
     
     Instance variables:
-        rule  -- the rule as a string (str)
-        tars  -- target segments (list)
-        reps  -- replacement segments (list)
-        envs  -- application environments (list)
-        excs  -- exception environments (list)
+        rule      -- the rule as a string (str)
+        tars      -- target segments (list)
+        reps      -- replacement segments (list)
+        envs      -- application environments (list)
+        excs      -- exception environments (list)
         otherwise -- the rule to apply if an exception is satisfied (Rule)
-        flags -- flags for altering execution (dict)
+        flags     -- flags for altering execution (dict)
     
     Methods:
         apply       -- apply the rule to a word
-        apply_match -- apply a single match to a word
+        check_match -- check if the match is valid
     '''
         
     __slots__ = ()
@@ -127,7 +126,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 else:
                     i += 1
         for match, rep in sorted(zip(matches, reps), reverse=True):
-            word = self.apply_match(match, rep, word)
+            word = word.apply_match(match, rep)
         if not reps:
             raise RuleFailed
         if phones == tuple(word):
@@ -145,58 +144,12 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             if self.otherwise is not None:  # Try checking otherwise
                 return self.otherwise.check_match(match, word)
         return False
-    
-    def apply_match(self, match, rep, word):
-        '''Apply a replacement to a word
-        
-        Arguments:
-            match -- the match to be checked
-            rep   -- the replacement to be used
-            word  -- the word to check against
-        
-        Returns a bool.
-        '''
-        pos, length, catixes = match[:3]
-        tar = word[pos:pos+length]
-        if isinstance(rep, list):  # Replacement
-            rep = rep.copy()
-            # Deal with categories and ditto marks
-            ix = 0
-            for i in range(len(rep)):
-                if isinstance(rep[i], Cat):
-                    rep[i] = rep[i][catixes[ix] % len(rep[i])]
-                    ix = (ix + 1) % len(catixes)
-                elif rep[i] == '"':
-                    rep[i] = rep[i-1]
-            # Deal with target references
-            for i in reversed(range(len(rep))):
-                if rep[i] == '%':  # Target copying
-                    rep[i:i+1] = tar
-                elif rep[i] == '<':  # Target reversal/metathesis
-                    rep[i:i+1] = reversed(tar)
-            word = word[:pos] + rep + word[pos+length:]
-        else:  # Movement
-            if isinstance(rep[1], list):  # Environment
-                mode, envs = rep
-                matches = []
-                for wpos in range(1, len(word)):  # Find all matches
-                    if any(word.match_env(env, wpos) for env in envs):
-                        if mode == 'move' and wpos >= pos + length:  # We'll need to adjust the matches down
-                            wpos -= length
-                        matches.append(wpos)
-            else:  # Indices
-                mode, matches = rep[0], rep[1]
-            if mode == 'move':  # Move - delete original tar
-                word = word[:pos] + word[pos+length:]
-            for match in sorted(matches, reverse=True):
-                word = word[:match] + tar + word[match:]
-        return word
 
 class RuleBlock(list):
     '''Groups a block of sound changes together.
     
     Instance variables:
-        flags -- flags for altering execution (dict)
+        flags -- flags for altering execution (namedtuple)
     '''
     
     __slots__ = ('flags',)
@@ -208,13 +161,16 @@ class RuleBlock(list):
     def apply(self, word):
         applied = False
         rules = []  # We use a list to store rules, since they may be applied multiple times
+        values = []  # We have a parallel list for storing the values of the 'for' flag per rule
         for _rule in self:
+            # We want _rule to run before the stored rules, but to be placed at the end instead
             rules.append(_rule)
-            for rule in reversed(rules):
+            values.append(_rule.flags.for_)
+            for rule in [_rule]+rules[:-1]:
                 flags = rule.flags
-                if not flags['ditto'] or (flags['ditto'] != 1)^applied:
-                    for j in range(flags['repeat']):
-                        if randint(1, 100) <= flags['chance']:
+                if not flags.ditto or (flags.ditto != 1) ^ applied:
+                    for j in range(flags.repeat):
+                        if randint(1, 100) <= flags.chance:
                             applied = True
                             try:
                                 word = rule.apply(word)
@@ -225,13 +181,16 @@ class RuleBlock(list):
                                 break
                         else:
                             applied = False
-                    if flags['stop'] and (flags['stop'] != 1)^applied:
+                    if flags.stop and (flags.stop != 1) ^ applied:
                         return word
             for i in reversed(range(len(rules))):
-                rules[i].flags['for'] -= 1
-                if rules[i].flags['for'] == 0:  # If the rule has 'expired', discard it
+                values[i] -= 1
+                if values[i] == 0:  # If the rule has 'expired', discard it
                     del rules[i]
+                    del values[i]
         return word
+
+Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, for_, chance')
 
 # == Functions == #
 def parse_wordset(wordset, cats=None, syllabifier=None):
@@ -330,7 +289,7 @@ def compile_rule(rule, cats=None):
     '''
     _rule = rule
     rule = re.sub(r'\s+([>/!])\s+', r'\1', rule)
-    rule = re.sub(r'([:;])\s*', r'\1', rule)
+    rule = re.sub(r'([:;,])\s*', r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
     else:
@@ -435,19 +394,18 @@ def parse_flags(flags):
     Arguments:
         flags -- the flags to be parsed (str)
         
-    Returns a dictionary.
+    Returns a namedtuple.
     '''
-    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
+    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for_': 1, 'chance': 100}  # Default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
             _flags[flag] = int(arg)
+        elif flag.startswith('!'):
+            flag = flag.strip('!')
+            _flags[flag] = _flags[flag]-1
         else:
-            if flag.startswith('!'):
-                flag = flag.strip('!')
-                _flags[flag] = _flags[flag]-1
-            else:
-                _flags[flag] = 1-_flags[flag]
+            _flags[flag] = 1-_flags[flag]
     # Validate values
     # Binary flags
     for flag in ('ignore', 'rtl'):
@@ -458,13 +416,13 @@ def parse_flags(flags):
         if not -1 <= _flags[flag] <= 1:
             _flags[flag] = 0
     # Unbounded flags
-    for flag in ('repeat', 'for'):
+    for flag in ('repeat', 'for_'):
         if not 1 <= _flags[flag] <= MAX_RUNS:
             _flags[flag] = MAX_RUNS
     # Value flags
     if not 0 <= _flags['chance'] <= 100:
         _flags['chance'] = 100
-    return _flags
+    return Flags(**_flags)
 
 def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=True):
     '''Applies a set of sound change rules to a set of words.

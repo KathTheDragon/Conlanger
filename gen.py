@@ -15,6 +15,7 @@ Functions:
 Doesn't seem to be checking exceptions correctly (not urgent-urgent)
 
 === Implementation ===
+Probably going to completely overhaul this module
 Might be worth having gen_word() create the Word() at the beginning rather than the end
 Look into utilising decomposition theorem in syllable generation - might need to add more to pyle.Language
 
@@ -140,37 +141,28 @@ def gen_word(lang):
     Raises ExceededMaxRunsError when the word repeatedly fails to be valid
     '''
     word = ['#']
-    patterns, counts, constraints, frequency, monofreq = lang.wordConfig
-    pattFreq, phonFreq = lang.patternFreq, lang.graphFreq
-    sylCount = peaked_dist(counts, frequency, 1, monofreq)
-    for i in range(sylCount-1):  # Generate all but the final syllable
+    patterns, counts, constraints, frequency, monofreq = lang.word_config
+    pattern_freq, graph_freq = lang.pattern_freq, lang.graph_freq
+    syl_count = peaked_dist(counts, frequency, 1, monofreq)
+    for i in range(syl_count):
         for j in range(MAX_RUNS):
-            pattern = dist(patterns, pattFreq)
-            syl = populate(pattern, phonFreq)+['$']
+            pattern = dist(patterns, pattern_freq)
+            syl = populate(pattern, graph_freq) + (['$'] if i != syl_count-1 else ['#'])
             _word = Word(word+syl)
             for env in constraints:
                 if env in _word:
                     break
             else:
                 word += syl  # If so, keep it, else try a new syllable
-                break
+                if i != syl_count-1:
+                    break
+                else:
+                    syl_edges = [1]+[i-word[:i].count('$') for i in range(len(word)) if word[i] == '$']
+                while '$' in word:
+                    word.remove('$')
+                return Word(word, lang.cats['graphs'], syl_edges) 
         else:
             raise ExceededMaxRunsError()
-    for j in range(MAX_RUNS):
-        pattern = dist(patterns, pattFreq)
-        syl = populate(pattern, phonFreq)+['#']  # Generate final syllable
-        _word = Word(word+syl)
-        for env in constraints:
-            if env in _word:
-                break
-        else:
-            word += syl  # If so, keep it, else try a new syllable
-            sylEdges = [1]+[i-word[:i].count('$') for i in range(len(word)) if word[i] == '$']
-            while '$' in word:
-                word.remove('$')
-            return Word(word, lang.cats['graphs'], sylEdges)
-    else:
-        raise ExceededMaxRunsError()
 
 def gen_root(lang):
     '''Generate a single root as specified by 'lang'.
@@ -184,13 +176,13 @@ def gen_root(lang):
     '''
     # Generate a root according to rootPatterns
     root = []
-    patterns, counts, constraints, frequency, monofreq = lang.rootConfig
-    pattFreq, phonFreq = lang.patternFreq, lang.graphFreq
-    sylCount = peaked_dist(counts, frequency, 1, monofreq)
-    for i in range(sylCount):  # Generate all but the final syllable
+    patterns, counts, constraints, frequency, monofreq = lang.root_config
+    pattern_freq, graph_freq = lang.pattern_freq, lang.graph_freq
+    syl_count = peaked_dist(counts, frequency, 1, monofreq)
+    for i in range(syl_count):
         for j in range(MAX_RUNS):
-            pattern = dist(patterns, pattFreq)
-            syl = populate(pattern, phonFreq)
+            pattern = dist(patterns, pattern_freq)
+            syl = populate(pattern, graph_freq)
             _root = Word(root+syl)
             for env in constraints:
                 if env in _root:
