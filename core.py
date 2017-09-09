@@ -345,14 +345,12 @@ class Word(list):
         
         Returns a bool
         '''
+        if isinstance(env, tuple):
+            return all(self.match_env(e, pos, length) for e in env)
         env = env.copy()
         tar = self[pos:pos+length]
         for j in range(len(env)):
-            for i in reversed(range(len(env[j]))):
-                if env[j][i] == '%':
-                    env[j][i:i+1] = tar
-                if env[j][i] == '<':
-                    env[j][i:i+1] = reversed(tar)
+            env[j] = resolve_target_reference(env[j], tar)
         if len(env) == 1:
             return env[0] in self
         else:
@@ -386,11 +384,7 @@ class Word(list):
                 elif rep[i] == '"':
                     rep[i] = rep[i-1]
             # Deal with target references
-            for i in reversed(range(len(rep))):
-                if rep[i] == '%':  # Target copying
-                    rep[i:i+1] = tar
-                elif rep[i] == '<':  # Target reversal/metathesis
-                    rep[i:i+1] = reversed(tar)
+            rep = resolve_target_reference(rep, tar)
             word = self[:pos] + rep + self[pos+length:]
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
@@ -402,7 +396,7 @@ class Word(list):
                             wpos -= length
                         matches.append(wpos)
             else:  # Indices
-                mode, matches = rep[0], rep[1]
+                mode, matches = rep[0:2]
             if mode == 'move':  # Move - delete original tar
                 word = self[:pos] + self[pos+length:]
             else:
@@ -423,6 +417,15 @@ class Syllabifier:
 Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
 
 # == Functions == #
+def resolve_target_reference(seq, tar):
+    seq = seq.copy()
+    for i in reversed(range(len(seq))):
+        if seq[i] == '%':  # Target copying
+            seq[i:i+1] = tar
+        elif seq[i] == '<':  # Target reversal/metathesis
+            seq[i:i+1] = reversed(tar)
+    return seq
+
 def slice_indices(iter, start=None, end=None):
     '''Calculate absolute indices from slice indices on an iterable.
     

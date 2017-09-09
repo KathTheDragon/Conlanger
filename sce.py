@@ -21,7 +21,6 @@ Overhaul apply_ruleset
 
 === Features ===
 Implement $ and syllables
-Implement additional logic options for environments
 Is it possible to implement a>b>c as notation for a chain shift?
 
 === Style ===
@@ -135,12 +134,12 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     
     def check_match(self, match, word):
         pos, length = match[:2]
-        if self.excs and any(word.match_env(exc, pos, length) for exc in self.excs):
+        if self.excs and any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
             if self.otherwise is not None:  # Try checking otherwise
                 return self.otherwise.check_match(match, word)
-        elif any(word.match_env(env, pos, length) for env in self.envs):
+        elif any(word.match_env(env, pos, length) for env in self.envs):  # Does any environment match?
             return True
-        elif not self.excs:
+        elif not self.excs:  # Are there exceptions?
             if self.otherwise is not None:  # Try checking otherwise
                 return self.otherwise.check_match(match, word)
         return False
@@ -288,7 +287,7 @@ def compile_rule(rule, cats=None):
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
     _rule = rule
-    rule = re.sub(r'\s+([>/!])\s+', r'\1', rule)
+    rule = re.sub(r'\s+([>/!|&@])\s+', r'\1', rule)
     rule = re.sub(r'([:;,])\s*', r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
@@ -378,8 +377,11 @@ def parse_field(field, mode, cats=None):
             _field.append(rep)
     elif mode == 'envs':
         for env in split(field, '|', minimal=True):
-            if env.startswith('~'):  # ~X is equivalent to X_|_X
-                _field += parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats)
+            if '&' in env:
+                env = tuple(parse_field(env.replace('&','|'), 'envs', cats))
+            elif env.startswith('~'):  # ~X is equivalent to X_|_X
+                _field.extend(parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats))
+                continue
             elif '_' in env:
                 env = env.split('_')
                 env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
