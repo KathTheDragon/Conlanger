@@ -17,7 +17,6 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Overhaul apply_ruleset
 
 === Features ===
 Implement $ and syllables
@@ -111,7 +110,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 del matches[i]
         reps.reverse()
         # Filter overlaps
-        if self.flags['rtl']:
+        if self.flags.rtl:
             for i in reversed(range(len(matches)-1)):
                 if matches[i][0] + matches[i][1] > matches[i+1][0]:
                     del matches[i]

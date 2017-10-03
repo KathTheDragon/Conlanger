@@ -1,6 +1,7 @@
 '''Create and manipulate languages
 
 Classes:
+    Config   -- collection of gen.py configuration data
     Language -- represents a language
 
 Functions:
@@ -19,10 +20,12 @@ Add generating every possible word/root
 Consider where to raise/handle exceptions
 '''
 
-from .core import Cat, Config, parse_syms, parse_cats, split
+from .core import Cat, parse_syms, parse_cats, split
 from . import gen, sce
 
 # == Classes == #
+Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq, graphfreq, patternfreq')
+
 class Language:
     '''Class for representing a single language.
     
@@ -30,19 +33,15 @@ class Language:
         name        -- language name (str)
         cats        -- grapheme categories (dict)
         wordConfig  -- word configuration data (Config)
-        rootConfig  -- root configuration data (Config)
-        patternFreq -- drop-off frequency for patterns (float)
-        graphFreq   -- drop-off frequency for graphemes (float)
         syllabifier -- syllabification function (Syllabifier)
     
     Methods:
         parse_patterns -- parse a string denoting generation patterns
         gen_word       -- generate words
-        gen_root       -- generate roots
         apply_ruleset  -- apply a sound change ruleset to a wordset
     '''
     
-    def __init__(self, name='', cats=None, word_config=None, root_config=None, pattern_freq=0, graph_freq=0, syllabifier=None):
+    def __init__(self, name='', cats=None, word_config=None, syllabifier=None):
         '''Constructor for Language().
         
         Arguments:
@@ -58,15 +57,9 @@ class Language:
         if 'graphs' not in self.cats:  # Category 'graphs' must exist
             self.cats['graphs'] = Cat("'")
         if word_config is None:
-            self.word_config = Config([], range(0), [], 0, 0)
+            self.word_config = Config([], range(0), [], 0, 0, 0, 0)
         else:
             self.word_config = word_config
-        if root_config is None:
-            self.root_config = Config([], range(0), [], 0, 0)
-        else:
-            self.root_config = root_config
-        self.pattern_freq = pattern_freq
-        self.graph_freq = graph_freq
         self.syllabifier = syllabifier
     
     def parse_patterns(self, patterns):
@@ -97,21 +90,6 @@ class Language:
             results.append(gen.gen_word(self))
         return results
     
-    def gen_root(self, num):
-        '''Generates 'num' roots.
-        
-        Arguments:
-            num -- number of roots to generate, 0 generates every possible root (int)
-        
-        Returns a list
-        '''
-        if num == 0:  # Generate every possible root, unimplemented
-            return []
-        results = []
-        for i in range(num):
-            results.append(gen.gen_root(self))
-        return results
-    
     def apply_ruleset(self, wordset, ruleset, to_string=True):
         '''Runs the sound change 'ruleset' on the 'wordset'.
         
@@ -138,10 +116,7 @@ def load_lang(name):
     name = data[0].strip()
     cats = eval(data[1].strip())
     word_config = eval(data[2].strip())
-    root_config = eval(data[3].strip())
-    pattern_freq = eval(data[4].strip())
-    graph_freq = eval(data[5].strip())
-    return Language(name, cats, word_config, root_config, pattern_freq, graph_freq)
+    return Language(name, cats, word_config)
 
 def save_lang(lang):
     '''Saves a language to file.
@@ -152,10 +127,7 @@ def save_lang(lang):
     name = lang.name
     cats = str(lang.cats)
     word_config = str(lang.wordConfig)
-    root_config = str(lang.rootConfig)
-    pattern_freq = str(lang.patternFreq)
-    graph_freq = str(lang.graphFreq)
-    data = '\n'.join([name, cats, word_config, root_config, pattern_freq, graph_freq])
+    data = '\n'.join([name, cats, word_config])
     with open('langs/{}.dat'.format(name.lower()), 'w', encoding='utf-8') as f:
         f.write(data)
 

@@ -108,7 +108,7 @@ def populate(pattern, frequency, all=False):
         for seg in pattern:
             if isinstance(seg, Cat):
                 result.append(dist(seg, frequency))
-            elif seg == "'":
+            elif seg == '"':
                 result.append(result[-1])
             else:
                 result.append(seg)
@@ -141,13 +141,12 @@ def gen_word(lang):
     Raises ExceededMaxRunsError when the word repeatedly fails to be valid
     '''
     word = ['#']
-    patterns, counts, constraints, frequency, monofreq = lang.word_config
-    pattern_freq, graph_freq = lang.pattern_freq, lang.graph_freq
+    patterns, counts, constraints, frequency, monofreq, patternfreq, graphfreq = lang.word_config
     syl_count = peaked_dist(counts, frequency, 1, monofreq)
     for i in range(syl_count):
         for j in range(MAX_RUNS):
-            pattern = dist(patterns, pattern_freq)
-            syl = populate(pattern, graph_freq) + (['$'] if i != syl_count-1 else ['#'])
+            pattern = dist(patterns, patternfreq)
+            syl = populate(pattern, graphfreq) + (['$'] if i != syl_count-1 else ['#'])
             _word = Word(word+syl)
             for env in constraints:
                 if env in _word:
@@ -163,34 +162,4 @@ def gen_word(lang):
                 return Word(word, lang.cats['graphs'], syl_edges) 
         else:
             raise ExceededMaxRunsError()
-
-def gen_root(lang):
-    '''Generate a single root as specified by 'lang'.
-    
-    Arguments:
-        lang -- the language the root is to be generated for (Language)
-    
-    Returns a Word
-    
-    Raises ExceededMaxRunsError when the root repeatedly fails to be valid
-    '''
-    # Generate a root according to rootPatterns
-    root = []
-    patterns, counts, constraints, frequency, monofreq = lang.root_config
-    pattern_freq, graph_freq = lang.pattern_freq, lang.graph_freq
-    syl_count = peaked_dist(counts, frequency, 1, monofreq)
-    for i in range(syl_count):
-        for j in range(MAX_RUNS):
-            pattern = dist(patterns, pattern_freq)
-            syl = populate(pattern, graph_freq)
-            _root = Word(root+syl)
-            for env in constraints:
-                if env in _root:
-                    break
-            else:
-                root += syl
-                break
-        else:
-            raise ExceededMaxRunsError()
-    return Word(root, lang.cats['graphs'])
 

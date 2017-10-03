@@ -7,7 +7,6 @@ Exceptions:
 Classes:
     Cat    -- represents a category of phonemes
     Word   -- represents a run of text
-    Config -- collection of gen.py configuration data
 
 Functions:
     parse_syms -- parses a string using pattern notation
@@ -17,7 +16,6 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Investigate reindexing Word
 Break out format checking into separate functions
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
@@ -414,8 +412,6 @@ class Syllabifier:
     def __call__(self, word):
         pass
 
-Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq')
-
 # == Functions == #
 def resolve_target_reference(seq, tar):
     seq = seq.copy()
@@ -554,7 +550,7 @@ def parse_word(word, graphs=None):
     graphemes = []
     for char in '#'.join(f'.{word}.'.split()).strip('.')+separator:  # Convert all whitespace to a single #
         test += char
-        while len(test) > 1 and not any(g.startswith(test) for g in polygraphs):
+        while len(test) > 1 and not any(graph.startswith(test) for graph in polygraphs):
             for i in reversed(range(1, len(test)+1)):
                 if i == 1 or test[:i] in polygraphs:
                     graphemes.append(test[:i])
