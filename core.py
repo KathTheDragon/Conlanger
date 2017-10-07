@@ -514,6 +514,7 @@ def parse_cats(cats):
         for cat in cats:
             if '=' in cat:
                 name, values = cat.split('=')
+                name, values = name.strip(), values.strip()
                 if name != '' and values != '':
                     _cats[name] = Cat(values, cats)
     elif isinstance(cats, dict):
