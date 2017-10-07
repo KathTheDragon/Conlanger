@@ -9,7 +9,9 @@ Classes:
 
 Functions:
     compile_ruleset -- compiles a sound change ruleset
-    parse_field     -- parse the fields of a rule
+    parse_tars      -- parse the targets of a rule
+    parse_reps      -- parse the replacements of a rule
+    parse_envs      -- parse the environments of a rule
     parse_flags     -- parse the flags of a rule
     apply_ruleset   -- applies a set of sound change rules to a set of words
 ''''''
@@ -133,7 +135,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     
     def check_match(self, match, word):
         pos, length = match[:2]
-        if self.excs and any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
+        if any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
             if self.otherwise is not None:  # Try checking otherwise
                 return self.otherwise.check_match(match, word)
         elif any(word.match_env(env, pos, length) for env in self.envs):  # Does any environment match?
@@ -249,6 +251,7 @@ def compile_ruleset(ruleset, cats=None):
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
             name, vals = rule.split(op)
+            name, vals = name.strip(), vals.strip()
             if name != '':
                 exec(f'cats[name] {op} Cat(vals, cats)')
                 for cat in list(cats):  # Discard blank categories
@@ -309,22 +312,22 @@ def compile_rule(rule, cats=None):
     else:
         otherwise = None
         rule = rule.split()
-    tars = parse_field(tars, 'tars', cats)
+    tars = parse_tars(tars, cats)
     if not tars:
         tars = [[]]
     if rule and rule[0].startswith('>'):
         if tars == [[]] and '@' in rule[0]:  # Indexed epenthesis
-            rule[0], indices = rule[0].split('@')
-            tars = parse_field('@'+indices, 'tars')
-        reps = parse_field(rule.pop(0).strip('>'), 'reps', cats)
+            rule[0], indices = rule[0].split('@')  # This can be made more intelligent, so that +a@1,b@2 is possible
+            tars = parse_tars('@'+indices, cats)
+        reps = parse_reps(rule.pop(0).strip('>'), cats)
     else:
         reps = []
     if rule and rule[0].startswith('/'):
-        envs = parse_field(rule.pop(0).strip('/'), 'envs', cats)
+        envs = parse_envs(rule.pop(0).strip('/'), cats)
     else:
-        envs = [[[], []]]
+        envs = [[]]
     if rule and rule[0].startswith('!'):
-        excs = parse_field(rule.pop(0).strip('!'), 'envs', cats)
+        excs = parse_envs(rule.pop(0).strip('!'), cats)
     else:
         excs = []
     flags = parse_flags(flags)
@@ -333,61 +336,79 @@ def compile_rule(rule, cats=None):
     if len(reps) < len(tars):
         reps *= ceil(len(tars)/len(reps))
     return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
-    
-def parse_field(field, mode, cats=None):
-    '''Parse a field of a sound change rule.
+
+def parse_tars(tars, cats=None):
+    '''Parse the targets of a sound change rule.
     
     Arguments:
-        field -- the field to be parsed (str)
-        mode  -- which kind of field it is (str)
+        tars -- the targets to be parsed (str)
+        cats -- dictionary of categories (dict)
+    
+    Returns a list
+    '''
+    _tars = []
+    for tar in split(tars, ',', nesting=(0, '([{', '}])'), minimal=True):
+        if '@' in tar:
+            tar, indices = tar.split('@')
+            indices = tuple(int(index) for index in split(indices, '|', minimal=True))
+            indices = tuple(index-(1 if index > 0 else 0) for index in indices)
+        else:
+            indices = ()
+        tar = parse_syms(tar, cats)
+        if indices:
+            tar = (tar, indices)
+        _tars.append(tar)
+    return _tars
+
+def parse_reps(reps, cats=None):
+    '''Parse the replacements of a sound change rule.
+    
+    Arguments:
+        reps -- the replacements to be parsed (str)
         cats  -- dictionary of categories (dict)
     
     Returns a list
     '''
-    if cats is None:
-        cats = {}
-    _field = []
-    if mode == 'tars':
-        for tar in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
-            if '@' in tar:
-                tar, indices = tar.split('@')
-                indices = tuple(int(index) for index in split(indices, '|', minimal=True))
-                indices = tuple(index-(1 if index > 0 else 0) for index in indices)
+    _reps = []
+    for rep in split(reps, ',', nesting=(0, '([{', '}])'), minimal=True):
+        if rep.startswith('^'):  # Movement rule
+            if rep.startswith('^?'):
+                mode = 'move'
             else:
-                indices = ()
-            tar = parse_syms(tar, cats)
-            if indices:
-                tar = (tar, indices)
-            _field.append(tar)
-    elif mode == 'reps':
-        for rep in split(field, ',', nesting=(0, '([{', '}])'), minimal=True):
-            if rep.startswith('^'):  # Movement rule
-                if rep.startswith('^?'):
-                    mode = 'move'
-                else:
-                    mode = 'copy'
-                rep = rep.strip('^?')
-                if rep.startswith('@'):  # Indices
-                    rep = (mode, tuple(int(index) for index in split(rep.strip('@'), '|', minimal=True)))
-                else:  # Environment
-                    rep = (mode, parse_field(rep, 'envs', cats))
-            else:  # Replace rule
-                rep = parse_syms(rep, cats)
-            _field.append(rep)
-    elif mode == 'envs':
-        for env in split(field, '|', minimal=True):
-            if '&' in env:
-                env = tuple(parse_field(env.replace('&','|'), 'envs', cats))
-            elif env.startswith('~'):  # ~X is equivalent to X_|_X
-                _field.extend(parse_field('{0}_|_{0}'.format(env.strip('~')), 'envs', cats))
-                continue
-            elif '_' in env:
-                env = env.split('_')
-                env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
-            else:
-                env = [parse_syms(env, cats)]
-            _field.append(env)
-    return _field
+                mode = 'copy'
+            rep = rep.strip('^?')
+            if rep.startswith('@'):  # Indices
+                rep = (mode, tuple(int(index) for index in split(rep.strip('@'), '|', minimal=True)))
+            else:  # Environment
+                rep = (mode, parse_envs(rep, cats))
+        else:  # Replace rule
+            rep = parse_syms(rep, cats)
+        _reps.append(rep)
+    return _reps
+
+def parse_envs(envs, cats=None):
+    '''Parse the environments of a sound change rule.
+    
+    Arguments:
+        envs -- the environments to be parsed (str)
+        cats  -- dictionary of categories (dict)
+    
+    Returns a list
+    '''
+    _envs = []
+    for env in split(envs, '|', minimal=True):
+        if '&' in env:
+            env = tuple(parse_envs(env.replace('&','|'), cats))
+        elif env.startswith('~'):  # ~X is equivalent to X_|_X
+            _envs.extend(parse_envs('{0}_|_{0}'.format(env.strip('~')), cats))
+            continue
+        elif '_' in env:
+            env = env.split('_')
+            env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
+        else:
+            env = [parse_syms(env, cats)]
+        _envs.append(env)
+    return _envs
 
 def parse_flags(flags):
     '''Parse the flags of a sound change rule.
@@ -397,16 +418,21 @@ def parse_flags(flags):
         
     Returns a namedtuple.
     '''
-    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for_': 1, 'chance': 100}  # Default values
+    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
     for flag in split(flags, ';', minimal=True):
         if ':' in flag:
             flag, arg = flag.split(':')
-            _flags[flag] = int(arg)
+            if flag in _flags:
+                _flags[flag] = int(arg)
         elif flag.startswith('!'):
             flag = flag.strip('!')
-            _flags[flag] = _flags[flag]-1
+            if flag in _flags:
+                _flags[flag] = _flags[flag]-1
         else:
-            _flags[flag] = 1-_flags[flag]
+            if flag in _flags:
+                _flags[flag] = 1-_flags[flag]
+    _flags['for_'] = _flags['for']
+    del _flags['for']
     # Validate values
     # Binary flags
     for flag in ('ignore', 'rtl'):
@@ -424,6 +450,14 @@ def parse_flags(flags):
     if not 0 <= _flags['chance'] <= 100:
         _flags['chance'] = 100
     return Flags(**_flags)
+
+def validate_rule(rule):
+    '''Determine if a rule is valid or not.
+    
+    Arguments:
+        rule -- the rule being tested (Rule)
+    '''
+    pass
 
 def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=True):
     '''Applies a set of sound change rules to a set of words.

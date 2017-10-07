@@ -349,9 +349,11 @@ class Word(list):
         tar = self[pos:pos+length]
         for j in range(len(env)):
             env[j] = resolve_target_reference(env[j], tar)
-        if len(env) == 1:
+        if len(env) == 0:  # Blank environment
+            return True
+        elif len(env) == 1:  # Global environment
             return env[0] in self
-        else:
+        else:  # Local environment
             if pos:
                 matchleft = self.match_pattern(env[0], 0, pos, -1)[0]
             else:  # At the left edge, which can only be matched by a null env
