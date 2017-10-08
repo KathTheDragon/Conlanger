@@ -71,7 +71,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     def __str__(self):
         return self.rule
         
-    def apply(self, word):
+    def apply(self, word, debug=False):
         '''Apply the sound change rule to a single word.
         
         Arguments:
@@ -111,21 +111,20 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             else:
                 del matches[i]
         reps.reverse()
+        matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
         if self.flags.rtl:
-            for i in reversed(range(len(matches)-1)):
-                if matches[i][0] + matches[i][1] > matches[i+1][0]:
-                    del matches[i]
-                    del reps[i]
-        else:
-            i = 1  # This marks the match we're testing for overlapping the previous match
+            i = 1
             while i < len(matches):
-                if matches[i][0] < matches[i-1][0] + matches[i-1][1]:  # Overlap
+                if matches[i][0][0] + matches[i][0][1] > matches[i-1][0][0]:  # Overlap
                     del matches[i]
-                    del reps[i]
                 else:
                     i += 1
-        for match, rep in sorted(zip(matches, reps), reverse=True):
+        else:
+            for i in reversed(range(len(matches)-1)):
+                if matches[i][0][0] < matches[i+1][0][0] + matches[i+1][0][1]:  # Overlap
+                    del matches[i]
+        for match, rep in matches:
             word = word.apply_match(match, rep)
         if not reps:
             raise RuleFailed
@@ -158,7 +157,7 @@ class RuleBlock(list):
         self.flags = flags
         list.__init__(self, ruleset)
     
-    def apply(self, word):
+    def apply(self, word, debug=False):
         applied = False
         rules = []  # We use a list to store rules, since they may be applied multiple times
         values = []  # We have a parallel list for storing the values of the 'for' flag per rule
@@ -173,7 +172,11 @@ class RuleBlock(list):
                         if randint(1, 100) <= flags.chance:
                             applied = True
                             try:
+                                if debug:
+                                    wordin = word
                                 word = rule.apply(word)
+                                if debug:
+                                    print(f'{wordin} -> {rule} -> {word}')
                             except RuleFailed:  # The rule didn't apply, make note of this
                                 applied = False
                                 break
@@ -459,7 +462,7 @@ def validate_rule(rule):
     '''
     pass
 
-def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=True):
+def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -475,8 +478,8 @@ def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_s
     cats = parse_cats(cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
-    wordset = [ruleset.apply(word) for word in wordset]
+    wordset = [str(ruleset.apply(word, debug)) for word in wordset]
     if to_string:
-        wordset = '\n'.join([str(word) for word in wordset])
+        wordset = '\n'.join(wordset)
     return wordset
 

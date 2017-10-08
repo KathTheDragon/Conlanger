@@ -385,7 +385,7 @@ class Word(list):
                     rep[i] = rep[i-1]
             # Deal with target references
             rep = resolve_target_reference(rep, tar)
-            word = self[:pos] + rep + self[pos+length:]
+            word = Word(list(self[:pos]) + rep + list(self[pos+length:]), self.graphs, self.syllabifier)
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
