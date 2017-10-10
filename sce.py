@@ -19,6 +19,7 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
+Revise how indexed epenthesis is parsed so that +a@1,b@2 is possible
 
 === Features ===
 Implement $ and syllables

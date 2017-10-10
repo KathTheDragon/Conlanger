@@ -23,6 +23,7 @@ After everything, look into using metaclasses in Word
 === Features ===
 Work on syllabification
 - lots of sub-steps here
+Something something punctuation
 
 === Style ===
 Consider where to raise/handle exceptions
