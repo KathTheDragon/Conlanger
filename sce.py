@@ -309,7 +309,7 @@ def compile_rule(rule, cats=None):
     '''
     _rule = rule
     rule = re.sub(r'\s+([>/!|&@])\s+', r'\1', rule)
-    rule = re.sub(r'([:;,])\s*', r'\1', rule)
+    rule = re.sub(r'([-+:;,])\s*', r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
     else:
