@@ -35,7 +35,6 @@ from collections import namedtuple
 from math import ceil
 from random import randint
 from .core import LangException, Cat, Word, parse_syms, parse_cats, split
-from .phomo import translate
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -241,15 +240,7 @@ def compile_ruleset(ruleset, cats=None):
     if cats is None:
         cats = {}
     _ruleset = []
-    phomo = False  # Tells us if we need to translate from PhoMo to SCE syntax first
     for rule in ruleset:
-        # Check PhoMo
-        if phomo:
-            rule = translate(rule)
-            if isinstance(phomo, int):
-                phomo -= 1
-                if phomo == 0:
-                    phomo = False
         # Remove comments
         if isinstance(rule, str):
             rule = rule.split('//')[0].strip()
@@ -271,12 +262,6 @@ def compile_ruleset(ruleset, cats=None):
                     if not cats[cat]:
                         del cats[cat]
         elif rule.startswith('!'):  # Meta-rule
-            if rule.startswith('!phomo'):  # Enable PhoMo rules
-                if ':' in rule:  # There's a value given
-                    phomo = int(rule.split(':')[1])
-                else:
-                    phomo = True
-                continue
             _ruleset.append(rule.strip('!'))
     # Second pass to create blocks
     for i in reversed(range(len(_ruleset))):
@@ -309,15 +294,16 @@ def compile_rule(rule, cats=None):
     '''
     _rule = rule
     rule = re.sub(r'\s+([>/!|&@])\s+', r'\1', rule)
-    rule = re.sub(r'([-+:;,])\s*', r'\1', rule)
+    rule = re.sub(r'^([+-])\s+', r'\1', rule)
+    rule = re.sub(r'([:;,])\s+', r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
     else:
         flags = ''
     if rule.startswith('+'):
-        rule = '>' + rule.strip('+').strip()
+        rule = '>' + rule.strip('+')
     elif rule.startswith('-'):
-        rule = rule.strip('-').strip()
+        rule = rule.strip('-')
     if '>' in rule or '/' in rule or '!' in rule:
         tars, rule = re.sub(r'(?<!{)([>/!])', r' \1', rule).split(' ', maxsplit=1)
     else:
