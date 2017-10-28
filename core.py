@@ -471,15 +471,15 @@ def parse_syms(syms, cats=None):
         if not syms[i]:
             del syms[i]
         elif syms[i][0] == '(':  # Optional - parse to list
-            syms[i] = parse_syms(syms[i].strip('()'), cats)
+            syms[i] = parse_syms(syms[i][1:-1], cats)
         elif syms[i][0] == '[':  # Category - parse to Cat
-            syms[i] = syms[i].strip('[]')
+            syms[i] = syms[i][1:-1]
             if ',' in syms[i]:  # Nonce cat
                 syms[i] = Cat(syms[i], cats)
             else:  # Named cat
                 syms[i] = cats[syms[i]]
         elif syms[i][0] == '{':  # Numbers - a few types of this
-            syms[i] = syms[i].strip('{}')
+            syms[i] = syms[i][1:-1]
             if syms[i][0] in '=<>':  # Comparison - parse to tuple
                 op = syms[i][0]
                 if syms[i][1] == '=' or op == '=':

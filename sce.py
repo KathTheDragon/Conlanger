@@ -106,11 +106,18 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         # Filter only those matches that fit the environment - also record the corresponding replacement
         reps = []
         for i in reversed(range(len(matches))):
-            if self.check_match(matches[i], word):
-                # Save the appropriate rep
-                reps.append(self.reps[matches[i][3]])
-            else:
+            check = self.check_match(matches[i], word)
+            if not check:
                 del matches[i]
+            else:
+                # Find the correct match
+                if check == 1:
+                    reps.append(self.reps[matches[i][3]])
+                else:
+                    otherwise = self.otherwise
+                    for j in range(check-2):
+                        otherwise = otherwise.otherwise
+                    reps.append(otherwise.reps[matches[i][3]])
         reps.reverse()
         matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
@@ -136,14 +143,14 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     def check_match(self, match, word):
         pos, length = match[:2]
         if any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
-            if self.otherwise is not None:  # Try checking otherwise
-                return self.otherwise.check_match(match, word)
+            pass
         elif any(word.match_env(env, pos, length) for env in self.envs):  # Does any environment match?
-            return True
-        elif not self.excs:  # Are there exceptions?
-            if self.otherwise is not None:  # Try checking otherwise
-                return self.otherwise.check_match(match, word)
-        return False
+            return 1
+        elif self.excs:  # Are there exceptions?
+            return 0
+        if self.otherwise is not None:  # Try checking otherwise
+            check = self.otherwise.check_match(match, word)
+            return check + (1 if check else 0)
 
 class RuleBlock(list):
     '''Groups a block of sound changes together.
