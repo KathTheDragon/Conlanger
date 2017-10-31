@@ -9,14 +9,16 @@ Classes:
 
 Functions:
     compile_ruleset -- compiles a sound change ruleset
+    compile_rule    -- compiles a sound change rule
     parse_tars      -- parse the targets of a rule
     parse_reps      -- parse the replacements of a rule
     parse_envs      -- parse the environments of a rule
     parse_flags     -- parse the flags of a rule
-    apply_ruleset   -- applies a set of sound change rules to a set of words
+    run             -- applies a set of sound change rules to a set of words
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
+Glitch related to having two of >/! in a row with intervening whitespace
 
 === Implementation ===
 Revise how indexed epenthesis is parsed so that +a@1,b@2 is possible
@@ -151,6 +153,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         if self.otherwise is not None:  # Try checking otherwise
             check = self.otherwise.check_match(match, word)
             return check + (1 if check else 0)
+        return 0
 
 class RuleBlock(list):
     '''Groups a block of sound changes together.
@@ -265,9 +268,8 @@ def compile_ruleset(ruleset, cats=None):
             name, vals = name.strip(), vals.strip()
             if name != '':
                 exec(f'cats[name] {op} Cat(vals, cats)')
-                for cat in list(cats):  # Discard blank categories
-                    if not cats[cat]:
-                        del cats[cat]
+                if not cats[name]:
+                    del cats[name]
         elif rule.startswith('!'):  # Meta-rule
             _ruleset.append(rule.strip('!'))
     # Second pass to create blocks
@@ -471,7 +473,7 @@ def validate_rule(rule):
     '''
     pass
 
-def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=False):
+def run(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -491,4 +493,6 @@ def apply_ruleset(wordset, ruleset, cats='', syllabifier=None, debug=False, to_s
     if to_string:
         wordset = '\n'.join(wordset)
     return wordset
+
+apply_ruleset = run
 
