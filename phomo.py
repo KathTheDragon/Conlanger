@@ -17,6 +17,8 @@ Functions:
 
 import re
 
+regex = re.compile(r'([A-Z])', r'[\1]')
+
 def translate(rule):
     # Preliminary conversions
     # Grab flags
@@ -30,7 +32,7 @@ def translate(rule):
         flags += 'ditto'
         rule = rule.replace('"', '')
     # Surround categories with [], change ? to <, split rule
-    rule = re.sub(r'([A-Z])', r'[\1]', rule.replace('?', '<')).split('/')  # Note that the category stuff doesn't really work - PhoMo categories can be Unicode capitals too
+    rule = regex.sub(rule.replace('?', '<')).split('/')  # Note that the category stuff doesn't really work - PhoMo categories can be Unicode capitals too
     while len(rule) < 5:
         rule.append('')
     trg, chg, env, exp, els = rule[:5]
