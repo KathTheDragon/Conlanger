@@ -18,7 +18,7 @@ Functions:
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
-Glitch related to having two of >/! in a row with intervening whitespace
+The index in indexed epenthesis isn't copied to the otherwise field
 
 === Implementation ===
 Revise how indexed epenthesis is parsed so that +a@1,b@2 is possible
@@ -294,6 +294,8 @@ def compile_ruleset(ruleset, cats=None):
                     _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
     return RuleBlock(_ruleset, None)
 
+regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+([>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,])\s+')
+
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
     
@@ -302,9 +304,8 @@ def compile_rule(rule, cats=None):
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
     _rule = rule
-    rule = re.sub(r'\s+([>/!|&@])\s+', r'\1', rule)
-    rule = re.sub(r'^([+-])\s+', r'\1', rule)
-    rule = re.sub(r'([:;,])\s+', r'\1', rule)
+    for regex in regexes:
+        rule = regex.sub(r'\1', rule)
     if ' ' in rule:
         rule, flags = rule.rsplit(maxsplit=1)
     else:
