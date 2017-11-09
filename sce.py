@@ -37,6 +37,7 @@ from collections import namedtuple
 from math import ceil
 from random import randint
 from .core import LangException, Cat, Word, parse_syms, parse_cats, split
+from .phomo import translate
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -250,7 +251,15 @@ def compile_ruleset(ruleset, cats=None):
     if cats is None:
         cats = {}
     _ruleset = []
+    phomo = False  # Tells us if we need to translate from PhoMo to SCE syntax first
     for rule in ruleset:
+        # Check PhoMo
+        if phomo:
+            rule = translate(rule)
+            if isinstance(phomo, int):
+                phomo -= 1
+                if phomo == 0:
+                    phomo = False
         # Remove comments
         if isinstance(rule, str):
             rule = rule.split('//')[0].strip()
@@ -271,6 +280,12 @@ def compile_ruleset(ruleset, cats=None):
                 if not cats[name]:
                     del cats[name]
         elif rule.startswith('!'):  # Meta-rule
+            if rule.startswith('!phomo'):  # Enable PhoMo rules
+                if ':' in rule:
+                    phomo = int(rule.split(':')[1])
+                else:
+                    phomo = True
+                continue
             _ruleset.append(rule.strip('!'))
     # Second pass to create blocks
     for i in reversed(range(len(_ruleset))):
