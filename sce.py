@@ -289,7 +289,7 @@ def compile_ruleset(ruleset, cats=None):
                 arg = 0
             if rule == 'block':
                 if arg:
-                    _ruleset[i:i+arg+1] = RuleBlock(_ruleset[i+1:i+arg+1], flags)
+                    _ruleset[i:i+arg+1] = [RuleBlock(_ruleset[i+1:i+arg+1], flags)]
                 else:
                     _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
     return RuleBlock(_ruleset, None)
