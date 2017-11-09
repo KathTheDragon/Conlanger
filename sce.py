@@ -32,6 +32,10 @@ Consider where to raise/handle exceptions
 Go over docstrings
 '''
 
+import logging
+import logging.config
+import os
+import os.path
 import re
 from collections import namedtuple
 from math import ceil
@@ -40,6 +44,9 @@ from .core import LangException, Cat, Word, parse_syms, parse_cats, split
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
+
+# == Globals == #
+logger = None
 
 # == Exceptions == #
 class RuleFailed(LangException):
@@ -168,7 +175,7 @@ class RuleBlock(list):
         self.flags = flags
         list.__init__(self, ruleset)
     
-    def apply(self, word, debug=False):
+    def apply(self, word):
         applied = False
         rules = []  # We use a list to store rules, since they may be applied multiple times
         values = []  # We have a parallel list for storing the values of the 'for' flag per rule
@@ -183,15 +190,15 @@ class RuleBlock(list):
                         if randint(1, 100) <= flags.chance:
                             applied = True
                             try:
-                                if debug:
-                                    wordin = word
+                                wordin = word
                                 word = rule.apply(word)
-                                if debug:
-                                    print(f'{wordin} -> {rule} -> {word}')
+                                logger.info(f'`{wordin}` -> `{rule}` -> `{word}`')
                             except RuleFailed:  # The rule didn't apply, make note of this
                                 applied = False
+                                logger.info(f'`{rule}` did not apply to `{word}`')
                                 break
                             except WordUnchanged:  # If the word didn't change, stop applying
+                                logger.info(f'`{word}` is not changed by `{rule}`')
                                 break
                         else:
                             applied = False
@@ -474,7 +481,13 @@ def validate_rule(rule):
     '''
     pass
 
-def run(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=False):
+def setup_logging(filename=__location__, logger_name='sce'):
+    global logger
+    if filename is not None:
+        logging.config.fileConfig(filename)
+    logger = logging.getLogger(logger_name)
+
+def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -482,7 +495,6 @@ def run(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=Fals
         ruleset     -- the rules which are to be applied to the words (RuleBlock)
         cats        -- the initial categories to be used in ruleset compiling (dict)
         syllabifier -- the syllabifier function to use for syllabifying words (Syllabifier)
-        debug       -- whether to output debug messages or not
         to_string   -- whether to give a string or list output
     
     Returns a str or list.
@@ -490,10 +502,13 @@ def run(wordset, ruleset, cats='', syllabifier=None, debug=False, to_string=Fals
     cats = parse_cats(cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
-    wordset = [str(ruleset.apply(word, debug)) for word in wordset]
+    wordset = [str(ruleset.apply(word)) for word in wordset]
     if to_string:
         wordset = '\n'.join(wordset)
     return wordset
 
 apply_ruleset = run
+
+# Setup logging
+setup_logging()
 
