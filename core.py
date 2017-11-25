@@ -19,6 +19,7 @@ Functions:
 Break out format checking into separate functions
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
+Replace super-disgusting hacky workaround in Word.match_env with something better
 
 === Features ===
 Work on syllabification
@@ -280,12 +281,13 @@ class Word(list):
             pos = start if step > 0 else end
         if ix is None:
             ix = 0 if step > 0 else (len(seq) - 1)
-        ipos = pos  # We need the initial value of pos at the end for calculating match length
+        istep = 1 if step > 0 else -1
         stack = []  # This stores the positions in the word and sequence that we branched at
         catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
         while 0 <= ix < len(seq):
             matched = False
-            length = ilength = step
+            length = step
+            ilength = istep
             if start <= pos <= end:  # Still in the slice
                 seg = seq[ix]
                 if isinstance(seg, str):
@@ -296,12 +298,12 @@ class Word(list):
                         if '**' in seg:  # Extended
                             for wpos in wrange:
                                 # wpos is always valid if wildcard is extended
-                                stack.append((wpos, ix+step))
+                                stack.append((wpos, ix+istep))
                         else:
                             for wpos in wrange:
                                 # otherwise wpos is valid if not matching '#'
                                 if '#' not in self[pos:wpos:step]:
-                                    stack.append((wpos, ix+step))
+                                    stack.append((wpos, ix+istep))
                     elif seg == '"':  # Ditto mark
                         matched = self[pos] == self[pos-1]
                     else:  # Grapheme
@@ -311,18 +313,24 @@ class Word(list):
                         matched = True
                         catixes.append(seg.index(self[pos]))
                 elif isinstance(seg, list):  # Optional sequence
+                    mode = 'g'
+                    jump = len(seg)
+                    ilength = 0
                     if seg[-1] == '?':  # Non-greedy
                         seg = seg[:-1]
-                        stack.append((pos, ix))
-                        ilength = len(seg)*step
-                    else:  # Greedy
-                        stack.append((pos, ix+len(seg)*step))
-                        ilength = 0
+                        mode = 'ng'
+                    if istep == 1 ^ mode == 'g':
+                        jump = 0
+                        ilength = len(seg)
+                    if istep == -1:
+                        jump += istep
+                        ilength += istep
+                    stack.append((pos, ix+jump))
                     seq = seq[:ix] + seg + seq[ix+1:]
                     matched = True
                     length = 0
                 elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions; slight problem with rtl
-                    stack.append((pos, ix-step))
+                    stack.append((pos, ix-istep))
                     matched = True
                     length = 0
             if matched:
@@ -332,7 +340,8 @@ class Word(list):
                 pos, ix = stack.pop()
             else:  # Total match failure
                 return False, 0, []
-        return True, (pos-ipos)*step, catixes
+        spos = start if step > 0 else end
+        return True, (pos-spos)*step, catixes
         
     def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
@@ -356,6 +365,14 @@ class Word(list):
             return env[0] in self
         else:  # Local environment
             if pos:
+                # Hacky thing for now to make wildcard repetitions actually work in the left env
+                for i in range(len(env[0])):
+                    if isinstance(env[0][i], tuple) and env[0][i][0].startswith('*'):
+                        env[0][i-1:i+1] = reversed(env[0][i-1:i+1])
+                    elif isinstance(env[0][i], list):
+                        for j in range(len(env[0][i])):
+                            if isinstance(env[0][i][j], tuple) and env[0][i][j][0].startswith('*'):
+                                env[0][i][j-1:j+1] = reversed(env[0][i][j-1:j+1])
                 matchleft = self.match_pattern(env[0], 0, pos, -1)[0]
             else:  # At the left edge, which can only be matched by a null env
                 matchleft = False if env[0] else True
