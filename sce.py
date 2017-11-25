@@ -26,6 +26,8 @@ Revise how indexed epenthesis is parsed so that +a@1,b@2 is possible
 === Features ===
 Implement $ and syllables
 Is it possible to implement a>b>c as notation for a chain shift?
+Think about expanding the options for grapheme handling
+- diacritics?
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -34,7 +36,6 @@ Go over docstrings
 
 import logging
 import logging.config
-import os
 import os.path
 import re
 from collections import namedtuple
@@ -45,6 +46,8 @@ from .phomo import translate
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
+__location__ = os.path.realpath(
+    os.path.join(os.getcwd(), os.path.dirname(__file__), 'logging.conf'))
 
 # == Globals == #
 logger = None
