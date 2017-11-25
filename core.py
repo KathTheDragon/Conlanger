@@ -319,7 +319,7 @@ class Word(list):
                     if seg[-1] == '?':  # Non-greedy
                         seg = seg[:-1]
                         mode = 'ng'
-                    if istep == 1 ^ mode == 'g':
+                    if (istep == 1) ^ (mode == 'g'):
                         jump = 0
                         ilength = len(seg)
                     if istep == -1:
