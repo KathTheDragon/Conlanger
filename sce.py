@@ -518,6 +518,14 @@ def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
     Returns a str or list.
     '''
     cats = parse_cats(cats)
+    # If we didn't get passed a graphs category, get it from the ruleset
+    if 'graphs' not in cats:
+        if isinstance(ruleset, str):
+            rule = ruleset.splitlines()[0]
+        else:
+            rule = ruleset[0]
+        if isinstance(rule, str) and '>' not in rule and '=' in rule and rule.startswith('graphs'):
+            cats['graphs'] = Cat(rule.split('=')[1].strip(), cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
     wordset = [str(ruleset.apply(word)) for word in wordset]
