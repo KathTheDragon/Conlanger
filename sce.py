@@ -22,6 +22,7 @@ The index in indexed epenthesis isn't copied to the otherwise field
 
 === Implementation ===
 Revise how indexed epenthesis is parsed so that +a@1,b@2 is possible
+Write rule validator
 
 === Features ===
 Implement $ and syllables
@@ -115,7 +116,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             if not indices:
                 matches += _matches
             else:
-                matches += [_matches[ix] for ix in indices]
+                matches += [_matches[ix] for ix in indices if ix < len(_matches)]
         # Filter only those matches that fit the environment - also record the corresponding replacement
         reps = []
         for i in reversed(range(len(matches))):
