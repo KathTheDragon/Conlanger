@@ -18,10 +18,8 @@ Functions:
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
-The index in indexed epenthesis isn't copied to the otherwise field
 
 === Implementation ===
-Revise how indexed epenthesis is parsed so that +a@1,b@2 is possible
 Write rule validator
 
 === Features ===
@@ -333,7 +331,7 @@ def compile_rule(rule, cats=None):
     # so otherwise begins at the first non-initial >
     pos = rule.find(' >', 1)
     if pos != -1:
-        otherwise = compile_rule(tars + rule[pos:].replace(' ', ''), cats)
+        otherwise = rule[pos:].replace(' ', '')
         rule = rule[:pos].split()
     else:
         otherwise = None
@@ -352,6 +350,9 @@ def compile_rule(rule, cats=None):
             else:
                 tars += '@,'
             rule[0] += _rep+','
+    if otherwise is not None:
+        otherwise = tars.strip(',') + otherwise
+        otherwise = compile_rule(otherwise, cats)
     tars = parse_tars(tars, cats)
     reps = parse_reps(rule[0].strip('>'), cats)
     envs = parse_envs(rule[1].strip('/'), cats)
