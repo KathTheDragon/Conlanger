@@ -14,6 +14,7 @@ Functions:
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
+catixes in Word.match_pattern should be redone to cope with non-linearity
 
 === Implementation ===
 Break out format checking into separate functions
@@ -176,6 +177,8 @@ class Word(list):
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
+        elif isinstance(item, tuple) and isinstance(item[0], (list, Word)):
+            return any(self.find(item[0], index) == 0 for index in item[1])
         else:
             return list.__contains__(self, item)
     
@@ -358,7 +361,10 @@ class Word(list):
         env = env.copy()
         tar = self[pos:pos+length]
         for j in range(len(env)):
-            env[j] = resolve_target_reference(env[j], tar)
+            if isinstance(env[j], tuple):
+                env[j] = (resolve_target_reference(env[j][0], tar), env[j][1])
+            else:
+                env[j] = resolve_target_reference(env[j], tar)
         if len(env) == 0:  # Blank environment
             return True
         elif len(env) == 1:  # Global environment
@@ -580,7 +586,7 @@ def parse_word(word, graphs=None):
     return graphemes
 
 def split(string, sep=None, nesting=None, minimal=False):
-    '''String splitting.
+    '''Nesting-aware string splitting.
     
     Arguments:
         string  -- the string to be split (str)
