@@ -373,15 +373,13 @@ def parse_tars(tars, cats=None):
     '''
     _tars = []
     for tar in split(tars, ',', nesting=(0, '([{', '}])'), minimal=True):
+        tar = tar.strip('@|')
         if '@' in tar:
             tar, indices = tar.split('@')
-            indices = tuple(int(index) for index in split(indices, '|', minimal=True))
-            indices = tuple(index-(1 if index > 0 else 0) for index in indices)
+            indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, '|', minimal=True))
+            tar = (parse_syms(tar, cats), indices)
         else:
-            indices = ()
-        tar = parse_syms(tar, cats)
-        if indices:
-            tar = (tar, indices)
+            tar = parse_syms(tar, cats)
         _tars.append(tar)
     return _tars
 
@@ -422,16 +420,23 @@ def parse_envs(envs, cats=None):
     '''
     _envs = []
     for env in split(envs, '|', minimal=True):
+        env = env.strip('@,')
         if '&' in env:
             env = tuple(parse_envs(env.replace('&','|'), cats))
         elif env.startswith('~'):  # ~X is equivalent to X_|_X
             _envs.extend(parse_envs('{0}_|_{0}'.format(env.strip('~')), cats))
             continue
-        elif '_' in env:
+        elif '_' in env:  # Local environment
             env = env.split('_')
             env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
-        else:
+        elif '@' in env:  # Indexed global environment
+            env, indices = env.split('@')
+            indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, ',', minimal=True))
+            env = [(parse_syms(env, cats), indices)]
+        else:  # Global environment
             env = [parse_syms(env, cats)]
+        if env in ([[]], [[],[]]):
+            env = []
         _envs.append(env)
     return _envs
 
