@@ -245,6 +245,8 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
             _wordset.append(Word(word, graphs, syllabifier))
     return _wordset
 
+regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+([>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,])\s+')
+
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
     
@@ -285,7 +287,7 @@ def compile_ruleset(ruleset, cats=None):
     for i in reversed(range(len(_ruleset))):
         if isinstance(_ruleset[i], str):
             rule = _ruleset[i]
-            rule = re.sub(r'\s*([:;])\s*', r'\1', rule)
+            rule = regexes[-1].sub(r'\1', rule)  # Clear extra whitespace
             if ' ' in rule:
                 rule, flags = rule.split()
             else:
@@ -303,8 +305,6 @@ def compile_ruleset(ruleset, cats=None):
                     _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
     return RuleBlock(_ruleset, None)
 
-regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+([>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,])\s+')
-
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
     
@@ -313,22 +313,24 @@ def compile_rule(rule, cats=None):
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
     _rule = rule
-    for regex in regexes:
+    for regex in regexes:  # Various whitespace manipulations
         rule = regex.sub(r'\1', rule)
-    if ' ' in rule:
+    if ' ' in rule:  # Flags are separated by whitespace from the rest of the rule
         rule, flags = rule.rsplit(maxsplit=1)
     else:
         flags = ''
-    if rule.startswith('+'):
+    if rule.startswith('+'):  # Put epenthesis/deletion operators into standard form
         rule = '>' + rule.strip('+')
     elif rule.startswith('-'):
         rule = rule.strip('-')
+    # Identify the field operators and place a space before them - if there are any, tars comes before
+    # the first operator, else tars is the whole rule
     if '>' in rule or '/' in rule or '!' in rule:
         tars, rule = re.sub(r'(?<!{)([>/!])', r' \1', rule).split(' ', maxsplit=1)
     else:
         tars, rule = rule, ''
     # If there is a > field, it will begin the rule, and there must always be a field before otherwise,
-    # so otherwise begins at the first non-initial >
+    # so otherwise begins at the first non-initial >. otherwise is None if not present
     pos = rule.find(' >', 1)
     if pos != -1:
         otherwise = rule[pos:].replace(' ', '')
@@ -336,7 +338,7 @@ def compile_rule(rule, cats=None):
     else:
         otherwise = None
         rule = rule.split()
-    for i in range(3):
+    for i in range(3):  # Fill in missing fields
         if len(rule) == i or rule[i][0] != ['>', '/', '!'][i]:
             rule.insert(i, ['>', '/', '!'][i])
     if not tars.strip(',') and '@' in rule[0]:  # Indexed epenthesis
@@ -344,21 +346,22 @@ def compile_rule(rule, cats=None):
         _reps = split(rule[0], ',', nesting=(0, '([{', '}])'), minimal=True)
         rule[0] = ''
         for _rep in _reps:
-            if '@' in _rep:  # Indexed epenthesis
+            if '@' in _rep:  # Index
                 _rep, indices = _rep.split('@')
                 tars += '@'+indices+','
             else:
                 tars += '@,'
             rule[0] += _rep+','
-    if otherwise is not None:
+    if otherwise is not None:  # We need to add the tars to otherwise to make a valid rule, then compile
         otherwise = tars.strip(',') + otherwise
         otherwise = compile_rule(otherwise, cats)
+    # Parse the fields
     tars = parse_tars(tars, cats) or [[]]
     reps = parse_reps(rule[0].strip('>'), cats) or [[]]
     envs = parse_envs(rule[1].strip('/'), cats) or [[]]
     excs = parse_envs(rule[2].strip('!'), cats)
     flags = parse_flags(flags)
-    if len(reps) < len(tars):
+    if len(reps) < len(tars):  # If reps is shorter than tars, repeat reps until it isn't
         reps *= ceil(len(tars)/len(reps))
     return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
 
