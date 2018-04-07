@@ -353,17 +353,11 @@ def compile_rule(rule, cats=None):
     if otherwise is not None:
         otherwise = tars.strip(',') + otherwise
         otherwise = compile_rule(otherwise, cats)
-    tars = parse_tars(tars, cats)
-    reps = parse_reps(rule[0].strip('>'), cats)
-    envs = parse_envs(rule[1].strip('/'), cats)
+    tars = parse_tars(tars, cats) or [[]]
+    reps = parse_reps(rule[0].strip('>'), cats) or [[]]
+    envs = parse_envs(rule[1].strip('/'), cats) or [[]]
     excs = parse_envs(rule[2].strip('!'), cats)
     flags = parse_flags(flags)
-    if not tars:
-        tars = [[]]
-    if not reps:
-        reps = [[]]
-    if not envs:
-        envs = [[]]
     if len(reps) < len(tars):
         reps *= ceil(len(tars)/len(reps))
     return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
