@@ -338,27 +338,31 @@ def compile_rule(rule, cats=None):
     else:
         otherwise = None
         rule = rule.split()
+    for i in range(3):
+        if len(rule) == i or rule[i][0] != ['>', '/', '!'][i]:
+            rule.insert(i, ['>', '/', '!'][i])
+    if not tars.strip(',') and '@' in rule[0]:  # Indexed epenthesis
+        tars = ''
+        _reps = split(rule[0], ',', nesting=(0, '([{', '}])'), minimal=True)
+        rule[0] = ''
+        for _rep in _reps:
+            if '@' in _rep:  # Indexed epenthesis
+                _rep, indices = _rep.split('@')
+                tars += '@'+indices+','
+            else:
+                tars += '@,'
+            rule[0] += _rep+','
     tars = parse_tars(tars, cats)
+    reps = parse_reps(rule[0].strip('>'), cats)
+    envs = parse_envs(rule[1].strip('/'), cats)
+    excs = parse_envs(rule[2].strip('!'), cats)
+    flags = parse_flags(flags)
     if not tars:
         tars = [[]]
-    if rule and rule[0].startswith('>'):
-        if tars == [[]] and '@' in rule[0]:  # Indexed epenthesis
-            rule[0], indices = rule[0].split('@')  # This can be made more intelligent, so that +a@1,b@2 is possible
-            tars = parse_tars('@'+indices, cats)
-        reps = parse_reps(rule.pop(0).strip('>'), cats)
-    else:
-        reps = []
-    if rule and rule[0].startswith('/'):
-        envs = parse_envs(rule.pop(0).strip('/'), cats)
-    else:
-        envs = [[]]
-    if rule and rule[0].startswith('!'):
-        excs = parse_envs(rule.pop(0).strip('!'), cats)
-    else:
-        excs = []
-    flags = parse_flags(flags)
     if not reps:
         reps = [[]]
+    if not envs:
+        envs = [[]]
     if len(reps) < len(tars):
         reps *= ceil(len(tars)/len(reps))
     return Rule(_rule, tars, reps, envs, excs, otherwise, flags)

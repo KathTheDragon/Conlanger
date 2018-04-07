@@ -580,7 +580,7 @@ def parse_word(word, graphs=None):
     return graphemes
 
 def split(string, sep=None, nesting=None, minimal=False):
-    '''String splitting.
+    '''Nesting-aware string splitting.
     
     Arguments:
         string  -- the string to be split (str)
