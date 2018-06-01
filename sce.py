@@ -82,6 +82,9 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     
     def __str__(self):
         return self.rule
+    
+    def __eq__(self, other):
+        return self[1:] == other[1:]
         
     def apply(self, word, debug=False):
         '''Apply the sound change rule to a single word.
@@ -94,14 +97,11 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         '''
         phones = tuple(word)
         matches = []
-        tars = self.tars
-        if not tars:
-            tars = [[]]
-        for i in range(len(tars)):
-            if isinstance(tars[i], tuple):
-                tar, indices = tars[i]
-            elif isinstance(tars[i], list):
-                tar, indices = tars[i], ()
+        for i in range(len(self.tars)):
+            if isinstance(self.tars[i], tuple):
+                tar, indices = self.tars[i]
+            elif isinstance(self.tars[i], list):
+                tar, indices = self.tars[i], ()
             else:
                 tar, indices = [], ()
             _matches = []
@@ -173,7 +173,7 @@ class RuleBlock(list):
     
     __slots__ = ('flags',)
     
-    def __init__(self, ruleset, flags):
+    def __init__(self, ruleset, flags=None):
         self.flags = flags
         list.__init__(self, ruleset)
     
@@ -303,7 +303,7 @@ def compile_ruleset(ruleset, cats=None):
                     _ruleset[i:i+arg+1] = [RuleBlock(_ruleset[i+1:i+arg+1], flags)]
                 else:
                     _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
-    return RuleBlock(_ruleset, None)
+    return RuleBlock(_ruleset)
 
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
@@ -376,7 +376,7 @@ def parse_tars(tars, cats=None):
     '''
     _tars = []
     for tar in split(tars, ',', nesting=(0, '([{', '}])'), minimal=True):
-        tar = tar.strip('@|')
+        tar = tar.rstrip('@|')
         if '@' in tar:
             tar, indices = tar.split('@')
             indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, '|', minimal=True))
