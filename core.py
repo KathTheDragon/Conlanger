@@ -102,6 +102,9 @@ class Cat(list):
     def __add__(self, cat):
         return Cat(list.__add__(self, cat))
     
+    def __iadd__(self, cat):
+        return NotImplemented
+    
     def __sub__(self, cat):
         return Cat(value for value in self if value not in cat)
 
