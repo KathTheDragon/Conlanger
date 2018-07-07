@@ -15,8 +15,6 @@ Functions:
 Doesn't seem to be checking exceptions correctly (not urgent-urgent)
 
 === Implementation ===
-Probably going to completely overhaul this module
-Might be worth having gen_word() create the Word() at the beginning rather than the end
 Look into utilising decomposition theorem in syllable generation - might need to add more to pyle.Language
 
 === Features ===
@@ -95,19 +93,19 @@ def peaked_dist(bins, a=0, m=0, c=0):
     else:
         return dist(bins[m:], a/(1-c), (x-c)/(1-c))
 
-def populate(pattern, frequency, all=False):
+def populate(pattern, mode, all=False):
     '''Generate a word section according to 'pattern'
     
     Arguments:
-        pattern   -- the pattern to generate (list)
-        frequency -- grapheme drop-off frequency (float)
-        all       -- indicator to generate every possible pattern, or one random pattern (bool)
+        pattern -- the pattern to generate (list)
+        mode    -- representation of the mode of the grapheme distribution (list)
+        all     -- indicator to generate every possible pattern, or one random pattern (bool)
     '''
     if not all:  # One random syllable
         result = []
         for seg in pattern:
             if isinstance(seg, Cat):
-                result.append(dist(seg, frequency))
+                result.append(peaked_dist(seg, *mode))
             elif seg == '"':
                 result.append(result[-1])
             else:
@@ -122,7 +120,7 @@ def populate(pattern, frequency, all=False):
                     for sym in seg:
                         temp.append(result+[sym])
                 results = temp
-            elif seg == "'":
+            elif seg == '"':
                 for i in range(len(results)):
                     results[i].append(results[i][-1])
             else:
@@ -130,36 +128,40 @@ def populate(pattern, frequency, all=False):
                     results[i].append(seg)
         return results
 
-def gen_word(lang):
-    '''Generate a single word as specified by 'lang'.
+def gen_word(config, graphs):
+    '''Generate a single word as specified by the 'config'.
     
     Arguments:
-        lang -- the language the word is to be generated for (Language)
+        config -- the config data to be used to generate this word
+        graphs -- the set of graphemes used for this word
     
     Returns a Word
     
     Raises ExceededMaxRunsError when the word repeatedly fails to be valid
     '''
-    word = ['#']
-    patterns, counts, constraints, frequency, monofreq, patternfreq, graphfreq = lang.word_config
-    syl_count = peaked_dist(counts, frequency, 1, monofreq)
-    for i in range(syl_count):
+    word = Word(['#'], graphs)
+    patterns, constraints, sylrange, sylmode, patternmode, graphmode = config
+    sylcount = peaked_dist(sylrange, *sylmode)
+    for i in range(sylcount):
+        if sylcount == 1:  # Monosyllable
+            _patterns = patterns["mono"]
+        elif i == 0:  # Initial syllable
+            _patterns = patterns["init"]
+        elif i == sylcount-1:  # Final syllable
+            _patterns = patterns["term"]
+        else:  # Medial syllable
+            _patterns = patterns["medi"]
         for j in range(MAX_RUNS):
-            pattern = dist(patterns, patternfreq)
-            syl = populate(pattern, graphfreq) + (['$'] if i != syl_count-1 else ['#'])
-            _word = Word(word+syl)
+            pattern = peaked_dist(_patterns, *patternmode)
+            syl = populate(pattern, graphmode)
+            _word = word + syl
             for env in constraints:
-                if env in _word:
+                if env and env in _word:
                     break
             else:
-                word += syl  # If so, keep it, else try a new syllable
-                if i != syl_count-1:
-                    break
-                else:
-                    syl_edges = [1]+[i-word[:i].count('$') for i in range(len(word)) if word[i] == '$']
-                while '$' in word:
-                    word.remove('$')
-                return Word(word, lang.cats['graphs'], syl_edges) 
+                word = _word
+                break
         else:
             raise ExceededMaxRunsError()
+    return word + '#'
 

@@ -5,26 +5,35 @@ Classes:
     Language -- represents a language
 
 Functions:
-    load_lang -- load the data from the named language file
-    save_lang -- save the given language's data to file
+    parse_patterns -- parse a string of generation patterns
+    load_lang      -- load the data from the named language file
+    save_lang      -- save the given language's data to file
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
 
 === Implementation ===
+Implement confirming overwriting save data - needs UI
+Maybe add different modes for each positional syllable type
 
 === Features ===
 Add generating every possible word/root
+Language.apply_ruleset will be replaced by calls to the diachronics module, once that exists
 
 === Style ===
 Consider where to raise/handle exceptions
 '''
 
+from collections import namedtuple
+import os
+import json
 from .core import Cat, parse_syms, parse_cats, split
 from . import gen, sce
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/
+
 # == Classes == #
-Config = namedtuple('Config', 'patterns, counts, constraints, freq, monofreq, graphfreq, patternfreq')
+Config = namedtuple('Config', 'patterns, constraints, sylrange, sylmode, patternmode, graphmode')
 
 class Language:
     '''Class for representing a single language.
@@ -36,61 +45,53 @@ class Language:
         syllabifier -- syllabification function (Syllabifier)
     
     Methods:
-        parse_patterns -- parse a string denoting generation patterns
-        gen_word       -- generate words
-        apply_ruleset  -- apply a sound change ruleset to a wordset
+        gen_word      -- generate words
+        apply_ruleset -- apply a sound change ruleset to a wordset
     '''
     
-    def __init__(self, name='', cats=None, word_config=None, syllabifier=None):
+    def __init__(self, name='', cats=None, configs=None, syllabifier=None):
         '''Constructor for Language().
         
         Arguments:
-            name        -- language name (str)
-            cats        -- grapheme categories (dict)
-            word_config  -- word configuration data (Config)
-            root_config  -- root configuration data (Config)
-            pattern_freq -- drop-off frequency for patterns (float)
-            graph_freq   -- drop-off frequency for graphemes (float)
+            name    -- language name (str)
+            cats    -- grapheme categories (dict)
+            configs -- configuration data sets (dict)
         '''
         self.name = name
-        self.cats = parse_cats(cats)
+        self.cats = {}
+        if cats is not None:
+            for cat in cats:
+                self.cats[cat] = Cat(cats[cat], self.cats)
         if 'graphs' not in self.cats:  # Category 'graphs' must exist
             self.cats['graphs'] = Cat("'")
-        if word_config is None:
-            self.word_config = Config([], range(0), [], 0, 0, 0, 0)
-        else:
-            self.word_config = word_config
+        self.configs = {}
+        if configs is None:
+            configs = {}
+        self._configs = configs  # We need to store the raw input so that we can retrieve it for saving to file
+        for config in configs:
+            _config = configs[config].copy()
+            _config["patterns"] = {k: parse_patterns(v, self.cats) for k,v in _config["patterns"].items()}
+            _config["constraints"] = parse_patterns(_config["constraints"], self.cats)
+            _config["sylrange"] = range(_config["sylrange"][0], _config["sylrange"][1]+1)
+            self.configs[config] = Config(**_config)
         self.syllabifier = syllabifier
     
-    def parse_patterns(self, patterns):
-        '''Parses generation patterns.
+    def gen(self, config, num=1):
+        '''Generates 'num' words using 'config'.
         
         Arguments:
-            patterns -- set of patterns to parse (str)
+            config -- config data to use
+            num    -- number of words to generate, 0 generates every possible word (int)
         
         Returns a list
         '''
-        patterns = split(patterns, ',', minimal=True)
-        for i in range(len(patterns)):
-            patterns[i] = parse_syms(patterns[i], self.cats)
-        return patterns
-    
-    def gen_word(self, num):
-        '''Generates 'num' words.
-        
-        Arguments:
-            num -- number of words to generate, 0 generates every possible word (int)
-        
-        Returns a list
-        '''
+        if config not in self.configs:
+            return []
         if num == 0:  # Generate every possible word, unimplemented
             return []
-        results = []
-        for i in range(num):
-            results.append(gen.gen_word(self))
-        return results
+        return [gen.gen_word(self.configs[config], self.cats['graphs']) for i in range(num)]
     
-    def apply_ruleset(self, wordset, ruleset, to_string=True):
+    def apply_ruleset(self, wordset, ruleset, to_string=False):
         '''Runs the sound change 'ruleset' on the 'wordset'.
         
         Arguments:
@@ -100,9 +101,21 @@ class Language:
         
         Returns a str or list
         '''
-        return sce.apply_ruleset(wordset, ruleset, self.cats, self.syllabifier, False, to_string)
+        return sce.run(wordset, ruleset, self.cats, self.syllabifier, to_string)
 
 # == Functions == #
+def parse_patterns(patterns, cats=None):
+    '''Parses generation patterns.
+    
+    Arguments:
+        patterns -- set of patterns to parse (str or list)
+    
+    Returns a list
+    '''
+    if isinstance(patterns, str):
+        patterns = split(patterns, ',', minimal=True)
+    return [parse_syms(pattern, cats) for pattern in patterns]
+
 def load_lang(name):
     '''Loads language data from file.
     
@@ -112,11 +125,8 @@ def load_lang(name):
     Returns a Language
     '''
     with open('langs/{}.dat'.format(name.lower()), 'r', encoding='utf-8') as f:
-        data = list(f)
-    name = data[0].strip()
-    cats = eval(data[1].strip())
-    word_config = eval(data[2].strip())
-    return Language(name, cats, word_config)
+        data = json.load(f)
+    return Language(data["name"], data["cats"], data["configs"])
 
 def save_lang(lang):
     '''Saves a language to file.
@@ -124,10 +134,16 @@ def save_lang(lang):
     Arguments:
         lang -- the Language to save
     '''
-    name = lang.name
-    cats = str(lang.cats)
-    word_config = str(lang.wordConfig)
-    data = '\n'.join([name, cats, word_config])
-    with open('langs/{}.dat'.format(name.lower()), 'w', encoding='utf-8') as f:
-        f.write(data)
+    data = {"name": lang.name, "cats": {k: list(v) for k,v in lang.cats.items()}, "configs": lang._configs}
+    # Check for existing save data
+    with open('langs/{}.dat'.format(name.lower()), 'r+', encoding='utf-8') as f:
+        if f.read():
+            if True:  # Check if the user wants to overwrite this data - not implemented yet
+                f.truncate()
+            else:
+                return
+        json.dump(data)
+
+def getcwd():
+    print(os.getcwd())
 

@@ -21,6 +21,7 @@ Break out format checking into separate functions
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
 Replace super-disgusting hacky workaround in Word.match_env with something better
+Might want to add a check for strings in Word.__add__
 
 === Features ===
 Work on syllabification
@@ -252,7 +253,7 @@ class Word(list):
         start, end = slice_indices(self, start, end)
         if isinstance(sub, Word):
             sub = sub.strip()  # We want to strip out '#'s at the edge so that this works like finding substrings
-        if isinstance(sub[-1], tuple):  # Counting
+        if sub and isinstance(sub[-1], tuple):  # Counting
             matches = 0
             op, count = sub[-1]
             for pos in range(start, end):
@@ -543,7 +544,7 @@ def parse_cats(cats):
                 name, values = cat.split('=')
                 name, values = name.strip(), values.strip()
                 if name != '' and values != '':
-                    _cats[name] = Cat(values, cats)
+                    _cats[name] = Cat(values, _cats)
     elif isinstance(cats, dict):
         for cat in cats:
             if cat == '' or not cats[cat]:
