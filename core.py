@@ -22,11 +22,12 @@ Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
 Replace super-disgusting hacky workaround in Word.match_env with something better
 Might want to add a check for strings in Word.__add__
+Maybe try to flatten optionals to avoid pathological nestings as far as possible
+Maybe replace the default syllabifier with something that actually lets words syllabify
 
 === Features ===
-Work on syllabification
-- lots of sub-steps here
 Something something punctuation
+Maybe add an alternative constraint-ish-based syllabifier?
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -152,7 +153,7 @@ class Word(list):
             syllabifier = def_syllabifier
         self.syllabifier = syllabifier
     
-    @lazyproperty
+    @property
     def syllables(self):
         return self.syllabifier(self)
     
@@ -286,6 +287,7 @@ class Word(list):
         end = end-1
         if pos is None:
             pos = start if step > 0 else end
+        spos = pos
         if ix is None:
             ix = 0 if step > 0 else (len(seq) - 1)
         istep = 1 if step > 0 else -1
@@ -313,6 +315,9 @@ class Word(list):
                                     stack.append((wpos, ix+istep))
                     elif seg == '"':  # Ditto mark
                         matched = self[pos] == self[pos-1]
+                    elif seg == '$':  # Syllable break
+                        matched = (pos in self.syllables)
+                        length = 0
                     else:  # Grapheme
                         matched = self[pos] == seg
                 elif isinstance(seg, Cat):  # Category
@@ -347,7 +352,6 @@ class Word(list):
                 pos, ix = stack.pop()
             else:  # Total match failure
                 return False, 0, []
-        spos = start if step > 0 else end
         return True, (pos-spos)*step, catixes
         
     def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
@@ -434,15 +438,48 @@ class Word(list):
         return word
 
 class Syllabifier:
-    __slots__ = ('peaks',)
+    __slots__ = ('rules',)
     
-    def __init__(self, rules, peak_cats, cats):
-        self.peaks = Cat(peak_cats, cats)
+    def __init__(self, rules, cats):
+        self.rules = []
+        for rule in rules:  # Parse rules
+            # Remove comments
+            rule = rule.split('//')[0].strip()
+            # Parse
+            if not rule:
+                continue
+            rule = parse_syms(rule, cats)
+            # Extract syllable breaks
+            breaks = []
+            while '$' in rule:
+                ix = rule.index('$')
+                if ix not in breaks:
+                    breaks.append(ix)
+                del rule[ix]
+            self.rules.append((rule, breaks))
     
     def __call__(self, word):
-        pass
+        breaks = []
+        # Step through the word
+        pos = 0
+        while pos < len(word):
+            for rule in self.rules:
+                match, length = word.match_pattern(rule[0], pos=pos)[:2]
+                if match:
+                    # Compute and add breaks for this pattern
+                    for ix in rule[1]:
+                        if 0 < pos+ix < len(word) and pos+ix not in breaks:  # We don't want a syllable break outside the word, nor duplicates
+                            breaks.append(pos+ix)
+                    # Step past this match
+                    pos += length
+                    break
+            else:  # No matches here
+                pos += 1
+        return tuple(breaks)
 
 # == Functions == #
+def_syllabifier = lambda s: ()  # Semi-permanent
+
 def resolve_target_reference(seq, tar):
     seq = seq.copy()
     for i in reversed(range(len(seq))):
@@ -471,8 +508,6 @@ def slice_indices(iter, start=None, end=None):
     elif end < 0:
         end += len(iter)
     return start, end
-
-def_syllabifier = lambda s: None  # Temporary
 
 def parse_syms(syms, cats=None):
     '''Parse a string using pattern notation.

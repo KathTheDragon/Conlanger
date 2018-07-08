@@ -89,7 +89,7 @@ class Language:
             return []
         if num == 0:  # Generate every possible word, unimplemented
             return []
-        return [gen.gen_word(self.configs[config], self.cats['graphs']) for i in range(num)]
+        return [gen.gen_word(self.configs[config], self.cats['graphs'], self.syllabifier) for i in range(num)]
     
     def apply_ruleset(self, wordset, ruleset, to_string=False):
         '''Runs the sound change 'ruleset' on the 'wordset'.

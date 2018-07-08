@@ -23,7 +23,6 @@ Functions:
 Write rule validator
 
 === Features ===
-Implement $ and syllables
 Is it possible to implement a>b>c as notation for a chain shift?
 Think about expanding the options for grapheme handling
 - diacritics?

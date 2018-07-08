@@ -15,7 +15,7 @@ Functions:
 Doesn't seem to be checking exceptions correctly (not urgent-urgent)
 
 === Implementation ===
-Look into utilising decomposition theorem in syllable generation - might need to add more to pyle.Language
+Look into utilising decomposition theorem in syllable generation - might need to add more to pyle.Language (is this redundant now?)
 
 === Features ===
 
@@ -128,7 +128,7 @@ def populate(pattern, mode, all=False):
                     results[i].append(seg)
         return results
 
-def gen_word(config, graphs):
+def gen_word(config, graphs, syllabifier):
     '''Generate a single word as specified by the 'config'.
     
     Arguments:
@@ -139,7 +139,7 @@ def gen_word(config, graphs):
     
     Raises ExceededMaxRunsError when the word repeatedly fails to be valid
     '''
-    word = Word(['#'], graphs)
+    word = Word(['#'], graphs, syllabifier)
     patterns, constraints, sylrange, sylmode, patternmode, graphmode = config
     sylcount = peaked_dist(sylrange, *sylmode)
     for i in range(sylcount):
