@@ -579,9 +579,9 @@ def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
             cats['graphs'] = Cat(rule.split('=')[1].strip(), cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
-    wordset = [str(ruleset.apply(word)) for word in wordset]
+    wordset = [ruleset.apply(word) for word in wordset]
     if to_string:
-        wordset = '\n'.join(wordset)
+        wordset = '\n'.join([str(word) for word in wordset])
     return wordset
 
 apply_ruleset = run
