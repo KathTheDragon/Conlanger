@@ -516,7 +516,7 @@ def parse_flags(flags):
                 try:
                     _flags[flag] = int(arg)
                 except ValueError:
-                    raise FormatError(f'flags must have numeric arguments: {_flag}}')
+                    raise FormatError(f'flags must have numeric arguments: {_flag}')
             else:
                 raise FormatError(f'invalid flag: {_flag}')
         elif flag.startswith('!'):
