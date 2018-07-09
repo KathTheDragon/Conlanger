@@ -27,7 +27,7 @@ Maybe replace the default syllabifier with something that actually lets words sy
 
 === Features ===
 Something something punctuation
-Maybe add an alternative constraint-ish-based syllabifier?
+Maybe add an alternative phonotactics-based syllabifier?
 
 === Style ===
 Consider where to raise/handle exceptions

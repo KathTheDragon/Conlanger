@@ -154,7 +154,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                     del matches[i]
         logger.debug(f'Applying matches to `{word}`')
         for match, rep in matches:
-            logger.debug(f'> Changing `{word[match[0]:match[0]+match[1]}` to `{rep}` at {matches[0]}')
+            logger.debug(f'> Changing `{word[match[0]:match[0]+match[1]]}` to `{rep}` at {matches[0]}')
             word = word.apply_match(match, rep)
         if not reps:
             raise RuleFailed
