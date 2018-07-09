@@ -20,7 +20,6 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Write rule validator
 
 === Features ===
 Is it possible to implement a>b>c as notation for a chain shift?
@@ -39,7 +38,7 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from .core import LangException, Cat, Word, parse_syms, parse_cats, split
+from .core import LangException, FormatError, Cat, Word, parse_syms, parse_cats, split
 from .phomo import translate
 
 # == Constants == #
@@ -86,7 +85,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     def __eq__(self, other):
         return self[1:] == other[1:]
         
-    def apply(self, word, debug=False):
+    def apply(self, word):
         '''Apply the sound change rule to a single word.
         
         Arguments:
@@ -95,7 +94,10 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         Raises RuleFailed if the rule did not apply to the word.
         Raises WordUnchanged if the word was not changed by the rule.
         '''
+        logger.debug(f'This rule: `{self}`')
         phones = tuple(word)
+        # Get all target matches, filtered by given indices
+        logger.debug('Begin matching targets')
         matches = []
         for i in range(len(self.tars)):
             if isinstance(self.tars[i], tuple):
@@ -104,24 +106,30 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 tar, indices = self.tars[i], ()
             else:
                 tar, indices = [], ()
+            logger.debug(f'> Matching `{tar}@{indices}`')
             _matches = []
             for pos in range(1, len(word)):  # Find all matches
                 match, length, catixes = word.match_pattern(tar, pos)
                 if match:  # tar matches at pos
+                    logger.debug(f'>> Target matched `{word[pos:pos+length]}` at {pos}')
                     _matches.append((pos, length, catixes, i))
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
             else:
                 matches += [_matches[ix] for ix in indices if ix < len(_matches)]
+        logger.debug(f'> Final matches at positions {[match[0] for match in matches]}')
         # Filter only those matches that fit the environment - also record the corresponding replacement
+        logger.debug('Check matches against environments and exceptions')
         reps = []
         for i in reversed(range(len(matches))):
+            logger.debug(f'> Checking match at {matches[i][0]}')
             check = self.check_match(matches[i], word)
             if not check:
                 del matches[i]
             else:
-                # Find the correct match
+                # Find the correct replacement
+                logger.debug('> Get replacement for this match')
                 if check == 1:
                     reps.append(self.reps[matches[i][3]])
                 else:
@@ -132,6 +140,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         reps.reverse()
         matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
+        logger.debug('Filter out overlapping matches')
         if self.flags.rtl:
             i = 1
             while i < len(matches):
@@ -143,7 +152,9 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             for i in reversed(range(len(matches)-1)):
                 if matches[i][0][0] < matches[i+1][0][0] + matches[i+1][0][1]:  # Overlap
                     del matches[i]
+        logger.debug(f'Applying matches to `{word}`')
         for match, rep in matches:
+            logger.debug(f'> Changing `{word[match[0]:match[0]+match[1]}` to `{rep}` at {matches[0]}')
             word = word.apply_match(match, rep)
         if not reps:
             raise RuleFailed
@@ -154,11 +165,15 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     def check_match(self, match, word):
         pos, length = match[:2]
         if any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
-            pass
+            logger.debug('>> Matched an exception, check the "else" rule')
         elif any(word.match_env(env, pos, length) for env in self.envs):  # Does any environment match?
+            logger.debug('>> Matched an environment, check succeeded')
             return 1
         elif self.excs:  # Are there exceptions?
+            logger.debug('>> Environments and exceptions don\'t match, check failed')
             return 0
+        else:
+            logger.debug('>> Environment doesn\'t match, check "else" rule')
         if self.otherwise is not None:  # Try checking otherwise
             check = self.otherwise.check_match(match, word)
             return check + (1 if check else 0)
@@ -204,6 +219,7 @@ class RuleBlock(list):
                                 break
                         else:
                             applied = False
+                            logger.info(f'`{rule}` was randomly not run on `{word}`')
                     if flags.stop and (flags.stop != 1) ^ applied:
                         return word
             for i in reversed(range(len(rules))):
@@ -273,14 +289,20 @@ def compile_ruleset(ruleset, cats=None):
         # Remove comments
         if isinstance(rule, str):
             rule = rule.split('//')[0].strip()
-        # Compile
         if rule == '':
             continue
+        # Compile
         elif isinstance(rule, Rule):
             _ruleset.append(rule)
         elif '>' in rule or rule[0] in '+-':  # Rule is a sound change
-            _ruleset.append(compile_rule(rule, cats))
+            try:
+                _ruleset.append(compile_rule(rule, cats))
+            except FormatError as e:
+                logger.warning(f'Rule `{rule}` failed to compile due to bad formatting: {e}')
         elif '=' in rule:  # Rule is a cat definition
+            if rule.count('=') > 1:
+                logger.warning(f'Category `{rule}` failed to compile due to bad formatting: category definitions can only have one "="')
+                continue
             cop = rule.index('=')
             op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
             name, vals = rule.split(op)
@@ -289,6 +311,8 @@ def compile_ruleset(ruleset, cats=None):
                 exec(f'cats[name] {op} Cat(vals, cats)')
                 if not cats[name]:
                     del cats[name]
+            else:
+                logger.warning(f'Category `{rule}` failed to compile due to bad formatting: category definitions must have a non-empty name')
         elif rule.startswith('!'):  # Meta-rule
             if rule.startswith('!phomo'):  # Enable PhoMo rules
                 if ':' in rule:
@@ -306,10 +330,19 @@ def compile_ruleset(ruleset, cats=None):
                 rule, flags = rule.split()
             else:
                 flags = ''
-            flags = parse_flags(flags)
+            try:
+                flags = parse_flags(flags)
+            except FormatError as e:
+                logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: {e}')
+                continue
             if ':' in rule:
+                if rule.count(':') > 1:
+                    logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: meta-rules must have at most one argument: {rule}')
                 rule, arg = rule.split(':')
-                arg = int(arg)
+                try:
+                    arg = int(arg)
+                except ValueError:
+                    logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: meta-rules must have numeric arguments: {rule}:{arg}')
             else:
                 arg = 0
             if rule == 'block':
@@ -359,8 +392,10 @@ def compile_rule(rule, cats=None):
         tars = ''
         _reps = split(rule[0], ',', nesting=(0, '([{', '}])'), minimal=True)
         rule[0] = ''
-        for _rep in _reps:
+        for _rep in _reps:  # Maybe optimise this so I can use rule[0] = ','.join(reps) and tars = ','.join(indiceses)
             if '@' in _rep:  # Index
+                if _rep.count('@') > 1:
+                    raise FormatError(f'indexed epenthesis must have one `@` per replacement: {_rep}')
                 _rep, indices = _rep.split('@')
                 tars += '@'+indices+','
             else:
@@ -390,10 +425,16 @@ def parse_tars(tars, cats=None):
     '''
     _tars = []
     for tar in split(tars, ',', nesting=(0, '([{', '}])'), minimal=True):
+        _tar = tar  # Record the original for error messages
         tar = tar.rstrip('@|')
         if '@' in tar:
+            if tar.count('@') > 1:
+                raise FormatError(f'indexed targets must have exactly one `@`: {_tar}')
             tar, indices = tar.split('@')
-            indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, '|', minimal=True))
+            try:
+                indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, '|', minimal=True))
+            except ValueError:
+                raise FormatError(f'indices must be a pipe-separated (`|`) list of numbers: {_tar}')
             tar = (parse_syms(tar, cats), indices)
         else:
             tar = parse_syms(tar, cats)
@@ -411,14 +452,20 @@ def parse_reps(reps, cats=None):
     '''
     _reps = []
     for rep in split(reps, ',', nesting=(0, '([{', '}])'), minimal=True):
+        _rep = rep  # Record the original for error messages
         if rep.startswith('^'):  # Movement rule
+            if rep.count('^') > 1:
+                raise FormatError(f'replacement fields must have exactly one `^` in movement mode: {_rep}')
             if rep.startswith('^?'):
                 mode = 'move'
             else:
                 mode = 'copy'
             rep = rep.strip('^?')
             if rep.startswith('@'):  # Indices
-                rep = (mode, tuple(int(index) for index in split(rep.strip('@'), '|', minimal=True)))
+                try:
+                    rep = (mode, tuple(int(index) for index in split(rep.strip('@'), '|', minimal=True)))
+                except ValueError:
+                    raise FormatError(f'indices must be a pipe-separated (`|`) list of numbers: {_rep}')
             else:  # Environment
                 rep = (mode, parse_envs(rep, cats))
         else:  # Replace rule
@@ -437,6 +484,7 @@ def parse_envs(envs, cats=None):
     '''
     _envs = []
     for env in split(envs, '|', minimal=True):
+        _env = env  # Record the original for error messages
         env = env.strip('@,')
         if '&' in env:
             env = tuple(parse_envs(env.replace('&','|'), cats))
@@ -444,11 +492,18 @@ def parse_envs(envs, cats=None):
             _envs.extend(parse_envs('{0}_|_{0}'.format(env.strip('~')), cats))
             continue
         elif '_' in env:  # Local environment
+            if env.count('_') > 1:
+                raise FormatError(f'local environments must have exactly one `_`: {_env}')
             env = env.split('_')
             env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
         elif '@' in env:  # Indexed global environment
+            if env.count('@') > 1:
+                raise FormatError(f'indexed global environments must have exactly one `@`: {_env}')
             env, indices = env.split('@')
-            indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, ',', minimal=True))
+            try:
+                indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, ',', minimal=True))
+            except ValueError:
+                raise FormatError(f'lndices must be a comma-separated list of numbers: {_env}')
             env = [(parse_syms(env, cats), indices)]
         else:  # Global environment
             env = [parse_syms(env, cats)]
@@ -467,17 +522,29 @@ def parse_flags(flags):
     '''
     _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
     for flag in split(flags, ';', minimal=True):
+        _flag = flag  # Record the original for error messages
         if ':' in flag:
+            if flag.count(':') > 1:
+                raise FormatError(f'flags must have at most one argument: {_flag}')
             flag, arg = flag.split(':')
             if flag in _flags:
-                _flags[flag] = int(arg)
+                try:
+                    _flags[flag] = int(arg)
+                except ValueError:
+                    raise FormatError(f'flags must have numeric arguments: {_flag}}')
+            else:
+                raise FormatError(f'invalid flag: {_flag}')
         elif flag.startswith('!'):
             flag = flag.strip('!')
             if flag in _flags:
                 _flags[flag] = _flags[flag]-1
+            else:
+                raise FormatError(f'invalid flag: {_flag}')
         else:
             if flag in _flags:
                 _flags[flag] = 1-_flags[flag]
+            else:
+                raise FormatError(f'invalid flag: {_flag}')
     _flags['for_'] = _flags['for']
     del _flags['for']
     # Validate values
@@ -497,14 +564,6 @@ def parse_flags(flags):
     if not 0 <= _flags['chance'] <= 100:
         _flags['chance'] = 100
     return Flags(**_flags)
-
-def validate_rule(rule):
-    '''Determine if a rule is valid or not.
-    
-    Arguments:
-        rule -- the rule being tested (Rule)
-    '''
-    pass
 
 def setup_logging(filename=__location__, logger_name='sce'):
     global logger
