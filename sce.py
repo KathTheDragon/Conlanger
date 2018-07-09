@@ -594,7 +594,15 @@ def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
             cats['graphs'] = Cat(rule.split('=')[1].strip(), cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
-    wordset = [ruleset.apply(word) for word in wordset]
+    for i in range(len(wordset)):  # Extract bracketed parts of words
+        word = wordset[i]
+        start = word.find('{')
+        end = word.find('}')
+        if start == end == -1:  # No braces
+            wordset[i] = ([], word, [])
+        else:  # Braces
+            wordset[i] = (word[:start], word[start+1:end], word[end+1:])
+    wordset = [word[0]+ruleset.apply(word[1])+word[2] for word in wordset]
     if to_string:
         wordset = '\n'.join([str(word) for word in wordset])
     return wordset
