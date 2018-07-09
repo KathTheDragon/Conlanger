@@ -84,7 +84,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     def __eq__(self, other):
         return self[1:] == other[1:]
         
-    def apply(self, word, debug=False):
+    def apply(self, word):
         '''Apply the sound change rule to a single word.
         
         Arguments:
@@ -93,7 +93,10 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         Raises RuleFailed if the rule did not apply to the word.
         Raises WordUnchanged if the word was not changed by the rule.
         '''
+        logger.debug(f'This rule: `{self}`')
         phones = tuple(word)
+        # Get all target matches, filtered by given indices
+        logger.debug('Begin matching targets')
         matches = []
         for i in range(len(self.tars)):
             if isinstance(self.tars[i], tuple):
@@ -102,24 +105,30 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 tar, indices = self.tars[i], ()
             else:
                 tar, indices = [], ()
+            logger.debug(f'> Matching `{tar}@{indices}`')
             _matches = []
             for pos in range(1, len(word)):  # Find all matches
                 match, length, catixes = word.match_pattern(tar, pos)
                 if match:  # tar matches at pos
+                    logger.debug(f'>> Target matched `{word[pos:pos+length]}` at {pos}')
                     _matches.append((pos, length, catixes, i))
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
             else:
                 matches += [_matches[ix] for ix in indices if ix < len(_matches)]
+        logger.debug(f'> Final matches at positions {[match[0] for match in matches]}')
         # Filter only those matches that fit the environment - also record the corresponding replacement
+        logger.debug('Check matches against environments and exceptions')
         reps = []
         for i in reversed(range(len(matches))):
+            logger.debug(f'> Checking match at {matches[i][0]}')
             check = self.check_match(matches[i], word)
             if not check:
                 del matches[i]
             else:
-                # Find the correct match
+                # Find the correct replacement
+                logger.debug('> Get replacement for this match')
                 if check == 1:
                     reps.append(self.reps[matches[i][3]])
                 else:
@@ -130,6 +139,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         reps.reverse()
         matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
+        logger.debug('Filter out overlapping matches')
         if self.flags.rtl:
             i = 1
             while i < len(matches):
@@ -141,7 +151,9 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             for i in reversed(range(len(matches)-1)):
                 if matches[i][0][0] < matches[i+1][0][0] + matches[i+1][0][1]:  # Overlap
                     del matches[i]
+        logger.debug(f'Applying matches to `{word}`')
         for match, rep in matches:
+            logger.debug(f'> Changing `{word[match[0]:match[0]+match[1]}` to `{rep}` at {matches[0]}')
             word = word.apply_match(match, rep)
         if not reps:
             raise RuleFailed
@@ -152,11 +164,15 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     def check_match(self, match, word):
         pos, length = match[:2]
         if any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
-            pass
+            logger.debug('>> Matched an exception, check the "else" rule')
         elif any(word.match_env(env, pos, length) for env in self.envs):  # Does any environment match?
+            logger.debug('>> Matched an environment, check succeeded')
             return 1
         elif self.excs:  # Are there exceptions?
+            logger.debug('>> Environments and exceptions don\'t match, check failed')
             return 0
+        else:
+            logger.debug('>> Environment doesn\'t match, check "else" rule')
         if self.otherwise is not None:  # Try checking otherwise
             check = self.otherwise.check_match(match, word)
             return check + (1 if check else 0)
@@ -202,6 +218,7 @@ class RuleBlock(list):
                                 break
                         else:
                             applied = False
+                            logger.info(f'`{rule}` was randomly not run on `{word}`')
                     if flags.stop and (flags.stop != 1) ^ applied:
                         return word
             for i in reversed(range(len(rules))):
