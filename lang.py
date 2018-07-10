@@ -27,7 +27,7 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 import os
 import json
-from .core import Cat, parse_syms, parse_cats, split
+from .core import Cat, Syllabifier, parse_syms, parse_cats, split
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/
@@ -74,7 +74,7 @@ class Language:
             _config["constraints"] = parse_patterns(_config["constraints"], self.cats)
             _config["sylrange"] = range(_config["sylrange"][0], _config["sylrange"][1]+1)
             self.configs[config] = Config(**_config)
-        self.syllabifier = syllabifier
+        self.syllabifier = Syllabifier(syllabifier, self.cats)
     
     def gen(self, config, num=1):
         '''Generates 'num' words using 'config'.
@@ -126,7 +126,7 @@ def load_lang(name):
     '''
     with open('langs/{}.dat'.format(name.lower()), 'r', encoding='utf-8') as f:
         data = json.load(f)
-    return Language(data["name"], data["cats"], data["configs"])
+    return Language(**data)
 
 def save_lang(lang):
     '''Saves a language to file.

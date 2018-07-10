@@ -128,7 +128,7 @@ def populate(pattern, mode, all=False):
                     results[i].append(seg)
         return results
 
-def gen_word(config, graphs, syllabifier):
+def gen_word(config, graphs, syllabifier=None):
     '''Generate a single word as specified by the 'config'.
     
     Arguments:

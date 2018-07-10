@@ -125,7 +125,9 @@ class Word(list):
         strip         -- remove leading and trailing graphemes
     '''
     
-    __slots__ = ('graphs', 'syllabifier')
+    __slots__ = ('graphs', 'syllabifier', '_syllables')
+    
+    _syllables = ()
     
     def __init__(self, lexeme=None, graphs=None, syllabifier=None):
         '''Constructor for Word
@@ -149,13 +151,13 @@ class Word(list):
                 if lexeme[i-1] == lexeme[i] == '#':  # Make sure we don't have multiple adjacent '#'s
                     del lexeme[i]
         list.__init__(self, lexeme)
-        if syllabifier is None:
-            syllabifier = def_syllabifier
         self.syllabifier = syllabifier
     
     @property
     def syllables(self):
-        return self.syllabifier(self)
+        if self._syllables == () and self.syllabifier is not None:
+            self._syllables = self.syllabifier(self)
+        return self._syllables
     
     def __repr__(self):
         return f"Word('{self!s}')"
@@ -478,8 +480,6 @@ class Syllabifier:
         return tuple(breaks)
 
 # == Functions == #
-def_syllabifier = lambda s: ()  # Semi-permanent
-
 def resolve_target_reference(seq, tar):
     seq = seq.copy()
     for i in reversed(range(len(seq))):
