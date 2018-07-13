@@ -15,6 +15,7 @@ Functions:
 ==================================== To-do ====================================
 === Bug-fixes ===
 catixes in Word.match_pattern should be redone to cope with non-linearity
+PhonoSyllabifier can't deal with medial word breaks
 
 === Implementation ===
 Break out format checking into separate functions
@@ -24,10 +25,10 @@ Replace super-disgusting hacky workaround in Word.match_env with something bette
 Might want to add a check for strings in Word.__add__
 Maybe try to flatten optionals to avoid pathological nestings as far as possible
 Maybe replace the default syllabifier with something that actually lets words syllabify
+PhonoSyllabifier needs to allow constraints
 
 === Features ===
 Something something punctuation
-Maybe add an alternative phonotactics-based syllabifier?
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -184,7 +185,7 @@ class Word(list):
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
         elif isinstance(item, tuple) and isinstance(item[0], (list, Word)):
-            return any(self.find(item[0], index) == 0 for index in item[1])
+            return any(self.match_pattern(item[0], index)[0] for index in item[1])
         else:
             return list.__contains__(self, item)
     
@@ -259,16 +260,16 @@ class Word(list):
             matches = 0
             op, count = sub[-1]
             for pos in range(start, end):
-                match, length = self.match_pattern(sub[:-1], pos, end)[:2]
+                match = self.match_pattern(sub[:-1], pos, end)[0]
                 if match:
                     matches += 1
             if eval(f'matches {op} count'):
                 return 1
         else:
             for pos in range(start, end):
-                match, length = self.match_pattern(sub, pos, end)[:2]
+                match = self.match_pattern(sub, pos, end)[0]
                 if match:
-                    return pos-start
+                    return pos
         return -1
     
     def match_pattern(self, seq, start=None, end=None, step=1):
@@ -441,14 +442,8 @@ class RulesSyllabifier:
     
     def __init__(self, cats, rules=()):
         self.rules = []
-        for rule in rules:  # Parse rules
-            # Remove comments
-            rule = rule.split('//')[0].strip()
-            # Parse
-            if not rule:
-                continue
-            rule = parse_syms(rule, cats)
-            # Extract syllable breaks
+        rules = parse_patterns(rules, cats)
+        for rule in rules:  # Extract syllable breaks
             breaks = []
             while '$' in rule:
                 ix = rule.index('$')
@@ -480,78 +475,59 @@ class PhonoSyllabifier:
     __slots__ = ('onsets', 'nuclei', 'codas')
     
     def __init__(self, cats, onsets=(), nuclei=(), codas=()):
-        self.onsets = []
-        self.nuclei = []
-        self.codas = []
-        for onset in onsets:  # Parse onsets
-            # Remove comments
-            onset = onset.split('//')[0].strip()
-            # Parse
-            if not onset:
-                continue
-            self.onsets.append(parse_syms(onset, cats))
-        for nucleus in nuclei:  # Parse onsets
-            # Remove comments
-            nucleus = nucleus.split('//')[0].strip()
-            # Parse
-            if not nucleus:
-                continue
-            self.nuclei.append(parse_syms(nucleus, cats))
-        for coda in codas:  # Parse onsets
-            # Remove comments
-            coda = coda.split('//')[0].strip()
-            # Parse
-            if not coda:
-                continue
-            self.codas.append(parse_syms(coda, cats))
+        self.onsets = parse_patterns(onsets, cats)
+        self.nuclei = parse_patterns(nuclei, cats)
+        self.codas = parse_patterns(codas, cats)
     
     def __call__(self, word):
-        # Find all possible nuclei
-        nuclei = []
-        for pos in range(len(word)-1):
-            for rank, nucleus in enumerate(self.nuclei):
-                match, length = word.match_pattern(nucleus, pos)[:2]
-                if match:
-                    if nucleus[0] == '#':
-                        pos += 1
-                        length -= 1
-                    if nucleus[-1] == '#':
-                        length -= 1
-                    nuclei.append((pos, length, rank))
-        # Find all possible syllables for each nucleus
+        # Find all possible syllables
+        nrange = None
         syllables = {}
-        for npos, nlen, nrank in nuclei:
-            # Get onsets
-            onsets = []
-            for rank, onset in enumerate(self.onsets):
-                if onset == ['_'] or onset == ['#','_'] and word[npos-1] == '#':
-                    onsets.append((npos, rank))
+        for npos in range(len(word)-1):
+            # Find all possible nuclei
+            for nrank, nucleus in enumerate(self.nuclei):
+                match, nlength = word.match_pattern(nucleus, npos)[:2]
+                if not match:
+                    continue
+                nrpos = npos+nlength
+                if nucleus[0] == '#':
+                    npos += 1
+                if nucleus[-1] == '#':
+                    nrpos -= 1
+                if nrange is None:
+                    nrange = [npos, nrpos]
                 else:
-                    for pos in range(npos):
-                        match, length = word.match_pattern(onset, pos, npos)[:2]
-                        if match and pos+length == npos:
+                    nrange[1] = nrpos
+                # Get onsets for this nucleus
+                onsets = []
+                for rank, onset in enumerate(self.onsets):
+                    if onset == ['_'] or onset == ['#','_'] and word[npos-1] == '#':
+                        onsets.append((npos, rank))
+                    else:
+                        match, length = word.match_pattern(onset, None, npos, -1)[:2]
+                        if match:
                             if onset[0] == '#':
-                                pos += 1
-                            onsets.append((pos, rank))
-            # Get codas
-            codas = []
-            for rank, coda in enumerate(self.codas):
-                if coda == ['_'] or coda == ['_','#'] and word[npos+nlen] == '#':
-                    codas.append((npos+nlen, rank))
-                else:
-                    match, length = word.match_pattern(coda, npos+nlen)[:2]
-                    if match:
-                        if coda[-1] == '#':
-                            length -= 1
-                        codas.append((npos+nlen+length, rank))
-            # Get syllables
-            for opos, orank in onsets:
-                for cpos, crank in codas:
-                    if opos not in syllables:
-                        syllables[opos] = []
-                    syllables[opos].append((cpos, orank+nrank+crank))
+                                length -= 1
+                            onsets.append((npos-length, rank))
+                # Get codas for this nucleus
+                codas = []
+                for rank, coda in enumerate(self.codas):
+                    if coda == ['_'] or coda == ['_','#'] and word[nrpos] == '#':
+                        codas.append((nrpos, rank))
+                    else:
+                        match, length = word.match_pattern(coda, nrpos)[:2]
+                        if match:
+                            if coda[-1] == '#':
+                                length -= 1
+                            codas.append((nrpos+length, rank))
+                # Get syllables for this nucleus
+                for opos, orank in onsets:
+                    for cpos, crank in codas:
+                        if opos not in syllables:
+                            syllables[opos] = []
+                        syllables[opos].append((cpos, orank+nrank+crank))
         # Obtain potential syllabifications
-        partials = [([pos], 0) for pos in range(1, nuclei[0][0]+1)]  # First syllable must start at least as early as the first potential nucleus
+        partials = [([pos], 0) for pos in range(1, nrange[0]+1)]  # First syllable must start at least as early as the first potential nucleus
         syllabifications = []
         while partials:
             partial, rank = partials.pop()
@@ -560,7 +536,7 @@ class PhonoSyllabifier:
                 nexts = syllables[end]
                 partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
             else:  # We've reached the end of this path!
-                if end >= sum(nuclei[-1][:2]):  # Last syllable must end at least as late as the last potential nucleus
+                if end >= nrange[1]:  # Last syllable must end at least as late as the last potential nucleus
                     syllabifications.append((partial, rank))
         # Correct rank according to how many extrasyllabic segments there are?
         # Find most optimal and return it
@@ -601,6 +577,39 @@ def slice_indices(iter, start=None, end=None):
     elif end < 0:
         end += len(iter)
     return start, end
+
+def parse_patterns(patterns, cats=None):
+    '''Parses generation patterns.
+    
+    Arguments:
+        patterns -- set of patterns to parse (str or list)
+    
+    Returns a list
+    '''
+    if isinstance(patterns, str):
+        patterns = patterns.splitlines()
+    if isinstance(patterns, list):
+        _patterns = []
+        for pattern in patterns:
+            #Remove comments
+            if isinstance(pattern, str):
+                pattern = pattern.split('//')[0]
+            if not pattern:
+                continue
+            if isinstance(pattern, list):
+                _patterns.append(pattern)
+            else:
+                _patterns.append(parse_syms(pattern, cats))
+    elif isinstance(patterns, dict):
+        _patterns = {key: [] for key in patterns}
+        for key, val in patterns.items():
+            for pattern in val:
+                #Remove comments
+                pattern = pattern.split('//')[0]
+                if not pattern:
+                    continue
+                _patterns[key].append(parse_syms(pattern, cats))
+    return _patterns
 
 def parse_syms(syms, cats=None):
     '''Parse a string using pattern notation.
@@ -680,7 +689,7 @@ def parse_cats(cats):
             elif isinstance(cats[cat], Cat):
                 _cats[cat] = cats[cat]
             else:
-                _cats[cat] = Cat(cats[cat])  # meow
+                _cats[cat] = Cat(cats[cat], _cats)  # meow
     for cat in list(_cats):  # Discard blank categories
         if not _cats[cat]:
             del _cats[cat]

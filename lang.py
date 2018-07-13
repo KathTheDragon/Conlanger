@@ -27,7 +27,7 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 import os
 import json
-from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_syms, parse_cats, split
+from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_patterns, parse_cats
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/
@@ -48,9 +48,9 @@ class Language:
         gen_word      -- generate words
         apply_ruleset -- apply a sound change ruleset to a wordset
     '''
-    __slots__ = ('name', 'cats', '_configs', 'configs', '_syllabifier', 'rulessyllabifier', 'phonosyllabifier')
+    __slots__ = ('name', 'cats', '_configs', 'configs', '_phonotactics', 'phonotactics', '_syllabifier', 'syllabifier')
     
-    def __init__(self, name='', cats=None, configs=None, syllabifier=None):
+    def __init__(self, name='', cats=None, configs=None, phonotactics=None, syllabifier=None):
         '''Constructor for Language().
         
         Arguments:
@@ -59,10 +59,7 @@ class Language:
             configs -- configuration data sets (dict)
         '''
         self.name = name
-        self.cats = {}
-        if cats is not None:
-            for cat in cats:
-                self.cats[cat] = Cat(cats[cat], self.cats)
+        self.cats = parse_cats(cats)
         if 'graphs' not in self.cats:  # Category 'graphs' must exist
             self.cats['graphs'] = Cat("'")
         self.configs = {}
@@ -71,13 +68,18 @@ class Language:
         self._configs = configs  # We need to store the raw input so that we can retrieve it for saving to file
         for config in configs:
             _config = configs[config].copy()
-            _config['patterns'] = {k: parse_patterns(v, self.cats) for k,v in _config['patterns'].items()}
+            _config['patterns'] = parse_patterns(_config['patterns'], self.cats)
             _config['constraints'] = parse_patterns(_config['constraints'], self.cats)
             _config['sylrange'] = range(_config['sylrange'][0], _config['sylrange'][1]+1)
             self.configs[config] = Config(**_config)
+        self._phonotactics = phonotactics  # We need to store the raw input so that we can retrieve it for saving to file
+        if phonotactics is not None:
+            self.phonotactics = parse_patterns(phonotactics, self.cats)
         self._syllabifier = syllabifier  # We need to store the raw input so that we can retrieve it for saving to file
-        self.rulessyllabifier = RulesSyllabifier(self.cats, syllabifier['rules'])
-        self.phonosyllabifier = PhonoSyllabifier(self.cats, syllabifier['onsets'], syllabifier['nuclei'], syllabifier['codas'])
+        if syllabifier is not None:
+            self.syllabifier = RulesSyllabifier(self.cats, parse_patterns(syllabifier, self.cats))
+        else:
+            self.syllabifier = PhonoSyllabifier(self.cats, **self.phonotactics)
     
     def gen(self, config, num=1):
         '''Generates 'num' words using 'config'.
@@ -107,18 +109,6 @@ class Language:
         return sce.run(wordset, ruleset, self.cats, self.syllabifier, to_string)
 
 # == Functions == #
-def parse_patterns(patterns, cats=None):
-    '''Parses generation patterns.
-    
-    Arguments:
-        patterns -- set of patterns to parse (str or list)
-    
-    Returns a list
-    '''
-    if isinstance(patterns, str):
-        patterns = split(patterns, ',', minimal=True)
-    return [parse_syms(pattern, cats) for pattern in patterns]
-
 def load_lang(name):
     '''Loads language data from file.
     
