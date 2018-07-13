@@ -578,7 +578,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
         wordset     -- the words to which the rules are to be applied (list)
         ruleset     -- the rules which are to be applied to the words (RuleBlock)
         cats        -- the initial categories to be used in ruleset compiling (dict)
-        syllabifier -- the syllabifier function to use for syllabifying words (Syllabifier)
+        syllabifier -- the syllabifier function to use for syllabifying words (RulesSyllabifier)
         to_string   -- whether to give a string or list output
     
     Returns a str or list.

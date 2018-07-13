@@ -115,7 +115,7 @@ class Word(list):
     
     Instance variables:
         graphs      -- a category of graphemes (Cat)
-        syllabifier -- a function that syllabifies the input word (Syllabifier)
+        syllabifier -- a function that syllabifies the input word (RulesSyllabifier)
     
     Methods:
         find          -- find a match of a list using pattern notation to the word
@@ -125,7 +125,7 @@ class Word(list):
         strip         -- remove leading and trailing graphemes
     '''
     
-    __slots__ = ('graphs', 'syllabifier')
+    __slots__ = ('graphs', 'syllabifier', '_syllables')
     
     def __init__(self, lexeme=None, graphs=None, syllabifier=None):
         '''Constructor for Word
@@ -149,13 +149,14 @@ class Word(list):
                 if lexeme[i-1] == lexeme[i] == '#':  # Make sure we don't have multiple adjacent '#'s
                     del lexeme[i]
         list.__init__(self, lexeme)
-        if syllabifier is None:
-            syllabifier = def_syllabifier
         self.syllabifier = syllabifier
+        self._syllables = None
     
     @property
     def syllables(self):
-        return self.syllabifier(self)
+        if self._syllables is None and self.syllabifier is not None:
+            self._syllables = self.syllabifier(self)
+        return self._syllables
     
     def __repr__(self):
         return f"Word('{self!s}')"
@@ -270,7 +271,7 @@ class Word(list):
                     return pos-start
         return -1
     
-    def match_pattern(self, seq, start=None, end=None, step=1, pos=None, ix=None):
+    def match_pattern(self, seq, start=None, end=None, step=1):
         '''Match a pattern sequence to the word.
         
         Return if the sequence matches the end of the given slice of the word, the length of the match, and category indexes.
@@ -285,11 +286,9 @@ class Word(list):
         '''
         start, end = slice_indices(self, start, end)
         end = end-1
-        if pos is None:
-            pos = start if step > 0 else end
+        pos = start if step > 0 else end
         spos = pos
-        if ix is None:
-            ix = 0 if step > 0 else (len(seq) - 1)
+        ix = 0 if step > 0 else (len(seq) - 1)
         istep = 1 if step > 0 else -1
         stack = []  # This stores the positions in the word and sequence that we branched at
         catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
@@ -437,10 +436,10 @@ class Word(list):
                 word = word[:match] + tar + word[match:]
         return word
 
-class Syllabifier:
+class RulesSyllabifier:
     __slots__ = ('rules',)
     
-    def __init__(self, rules, cats):
+    def __init__(self, cats, rules=()):
         self.rules = []
         for rule in rules:  # Parse rules
             # Remove comments
@@ -464,7 +463,7 @@ class Syllabifier:
         pos = 0
         while pos < len(word):
             for rule in self.rules:
-                match, length = word.match_pattern(rule[0], pos=pos)[:2]
+                match, length = word.match_pattern(rule[0], pos)[:2]
                 if match:
                     # Compute and add breaks for this pattern
                     for ix in rule[1]:
@@ -477,9 +476,103 @@ class Syllabifier:
                 pos += 1
         return tuple(breaks)
 
-# == Functions == #
-def_syllabifier = lambda s: ()  # Semi-permanent
+class PhonoSyllabifier:
+    __slots__ = ('onsets', 'nuclei', 'codas')
+    
+    def __init__(self, cats, onsets=(), nuclei=(), codas=()):
+        self.onsets = []
+        self.nuclei = []
+        self.codas = []
+        for onset in onsets:  # Parse onsets
+            # Remove comments
+            onset = onset.split('//')[0].strip()
+            # Parse
+            if not onset:
+                continue
+            self.onsets.append(parse_syms(onset, cats))
+        for nucleus in nuclei:  # Parse onsets
+            # Remove comments
+            nucleus = nucleus.split('//')[0].strip()
+            # Parse
+            if not nucleus:
+                continue
+            self.nuclei.append(parse_syms(nucleus, cats))
+        for coda in codas:  # Parse onsets
+            # Remove comments
+            coda = coda.split('//')[0].strip()
+            # Parse
+            if not coda:
+                continue
+            self.codas.append(parse_syms(coda, cats))
+    
+    def __call__(self, word):
+        # Find all possible nuclei
+        nuclei = []
+        for pos in range(len(word)-1):
+            for rank, nucleus in enumerate(self.nuclei):
+                match, length = word.match_pattern(nucleus, pos)[:2]
+                if match:
+                    if nucleus[0] == '#':
+                        pos += 1
+                        length -= 1
+                    if nucleus[-1] == '#':
+                        length -= 1
+                    nuclei.append((pos, length, rank))
+        # Find all possible syllables for each nucleus
+        syllables = {}
+        for npos, nlen, nrank in nuclei:
+            # Get onsets
+            onsets = []
+            for rank, onset in enumerate(self.onsets):
+                if onset == ['_'] or onset == ['#','_'] and word[npos-1] == '#':
+                    onsets.append((npos, rank))
+                else:
+                    for pos in range(npos):
+                        match, length = word.match_pattern(onset, pos, npos)[:2]
+                        if match and pos+length == npos:
+                            if onset[0] == '#':
+                                pos += 1
+                            onsets.append((pos, rank))
+            # Get codas
+            codas = []
+            for rank, coda in enumerate(self.codas):
+                if coda == ['_'] or coda == ['_','#'] and word[npos+nlen] == '#':
+                    codas.append((npos+nlen, rank))
+                else:
+                    match, length = word.match_pattern(coda, npos+nlen)[:2]
+                    if match:
+                        if coda[-1] == '#':
+                            length -= 1
+                        codas.append((npos+nlen+length, rank))
+            # Get syllables
+            for opos, orank in onsets:
+                for cpos, crank in codas:
+                    if opos not in syllables:
+                        syllables[opos] = []
+                    syllables[opos].append((cpos, orank+nrank+crank))
+        # Obtain potential syllabifications
+        partials = [([pos], 0) for pos in range(1, nuclei[0][0]+1)]  # First syllable must start at least as early as the first potential nucleus
+        syllabifications = []
+        while partials:
+            partial, rank = partials.pop()
+            end = partial[-1]
+            if end in syllables:
+                nexts = syllables[end]
+                partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
+            else:  # We've reached the end of this path!
+                if end >= sum(nuclei[-1][:2]):  # Last syllable must end at least as late as the last potential nucleus
+                    syllabifications.append((partial, rank))
+        # Correct rank according to how many extrasyllabic segments there are?
+        # Find most optimal and return it
+        if not syllabifications:
+            return ()
+        _rank = syllabifications[0][1] + 1
+        for syll, rank in syllabifications:
+            if rank < _rank or rank == _rank and syll[-1]-syll[0] > candidate[-1]-candidate[0]:
+                candidate = syll
+        return tuple(candidate)
 
+# == Functions == #
 def resolve_target_reference(seq, tar):
     seq = seq.copy()
     for i in reversed(range(len(seq))):

@@ -128,7 +128,7 @@ def populate(pattern, mode, all=False):
                     results[i].append(seg)
         return results
 
-def gen_word(config, graphs, syllabifier):
+def gen_word(config, graphs, syllabifier=None):
     '''Generate a single word as specified by the 'config'.
     
     Arguments:
@@ -144,13 +144,13 @@ def gen_word(config, graphs, syllabifier):
     sylcount = peaked_dist(sylrange, *sylmode)
     for i in range(sylcount):
         if sylcount == 1:  # Monosyllable
-            _patterns = patterns["mono"]
+            _patterns = patterns['mono']
         elif i == 0:  # Initial syllable
-            _patterns = patterns["init"]
+            _patterns = patterns['init']
         elif i == sylcount-1:  # Final syllable
-            _patterns = patterns["term"]
+            _patterns = patterns['term']
         else:  # Medial syllable
-            _patterns = patterns["medi"]
+            _patterns = patterns['medi']
         for j in range(MAX_RUNS):
             pattern = peaked_dist(_patterns, *patternmode)
             syl = populate(pattern, graphmode)
