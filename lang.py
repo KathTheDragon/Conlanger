@@ -27,7 +27,7 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 import os
 import json
-from .core import Cat, Syllabifier, parse_syms, parse_cats, split
+from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_syms, parse_cats, split
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/
@@ -42,12 +42,13 @@ class Language:
         name        -- language name (str)
         cats        -- grapheme categories (dict)
         wordConfig  -- word configuration data (Config)
-        syllabifier -- syllabification function (Syllabifier)
+        syllabifier -- syllabification function (RulesSyllabifier)
     
     Methods:
         gen_word      -- generate words
         apply_ruleset -- apply a sound change ruleset to a wordset
     '''
+    __slots__ = ('name', 'cats', '_configs', 'configs', '_syllabifier', 'rulessyllabifier', 'phonosyllabifier')
     
     def __init__(self, name='', cats=None, configs=None, syllabifier=None):
         '''Constructor for Language().
@@ -70,11 +71,13 @@ class Language:
         self._configs = configs  # We need to store the raw input so that we can retrieve it for saving to file
         for config in configs:
             _config = configs[config].copy()
-            _config["patterns"] = {k: parse_patterns(v, self.cats) for k,v in _config["patterns"].items()}
-            _config["constraints"] = parse_patterns(_config["constraints"], self.cats)
-            _config["sylrange"] = range(_config["sylrange"][0], _config["sylrange"][1]+1)
+            _config['patterns'] = {k: parse_patterns(v, self.cats) for k,v in _config['patterns'].items()}
+            _config['constraints'] = parse_patterns(_config['constraints'], self.cats)
+            _config['sylrange'] = range(_config['sylrange'][0], _config['sylrange'][1]+1)
             self.configs[config] = Config(**_config)
-        self.syllabifier = Syllabifier(syllabifier, self.cats)
+        self._syllabifier = syllabifier  # We need to store the raw input so that we can retrieve it for saving to file
+        self.rulessyllabifier = RulesSyllabifier(self.cats, syllabifier['rules'])
+        self.phonosyllabifier = PhonoSyllabifier(self.cats, syllabifier['onsets'], syllabifier['nuclei'], syllabifier['codas'])
     
     def gen(self, config, num=1):
         '''Generates 'num' words using 'config'.
@@ -134,7 +137,7 @@ def save_lang(lang):
     Arguments:
         lang -- the Language to save
     '''
-    data = {"name": lang.name, "cats": {k: list(v) for k,v in lang.cats.items()}, "configs": lang._configs}
+    data = {'name': lang.name, 'cats': {k: list(v) for k,v in lang.cats.items()}, 'configs': lang._configs, 'syllabifier': lang._syllabifier}
     # Check for existing save data
     with open('langs/{}.dat'.format(name.lower()), 'r+', encoding='utf-8') as f:
         if f.read():
