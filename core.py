@@ -481,9 +481,13 @@ class PhonoSyllabifier:
     
     def __call__(self, word):
         # Find all possible syllables
-        nrange = None
+        boundaries = []  # List of word boundaries
+        nranges = []  # List of pairs denoting the full range of potential nuclei within each word
         syllables = {}
         for npos in range(len(word)-1):
+            if word[npos] == '#':
+                boundaries.append(npos)
+                nranges.append(None)
             # Find all possible nuclei
             for nrank, nucleus in enumerate(self.nuclei):
                 match, nlength = word.match_pattern(nucleus, npos)[:2]
@@ -494,10 +498,10 @@ class PhonoSyllabifier:
                     npos += 1
                 if nucleus[-1] == '#':
                     nrpos -= 1
-                if nrange is None:
-                    nrange = [npos, nrpos]
+                if nranges[-1] is None:
+                    nranges[-1] = [npos, nrpos]
                 else:
-                    nrange[1] = nrpos
+                    nranges[-1][1] = nrpos
                 # Get onsets for this nucleus
                 onsets = []
                 for rank, onset in enumerate(self.onsets):
@@ -527,26 +531,29 @@ class PhonoSyllabifier:
                             syllables[opos] = []
                         syllables[opos].append((cpos, orank+nrank+crank))
         # Obtain potential syllabifications
-        partials = [([pos], 0) for pos in range(1, nrange[0]+1)]  # First syllable must start at least as early as the first potential nucleus
-        syllabifications = []
-        while partials:
-            partial, rank = partials.pop()
-            end = partial[-1]
-            if end in syllables:
-                nexts = syllables[end]
-                partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
-            else:  # We've reached the end of this path!
-                if end >= nrange[1]:  # Last syllable must end at least as late as the last potential nucleus
-                    syllabifications.append((partial, rank))
-        # Correct rank according to how many extrasyllabic segments there are?
-        # Find most optimal and return it
-        if not syllabifications:
-            return ()
-        _rank = syllabifications[0][1] + 1
-        for syll, rank in syllabifications:
-            if rank < _rank or rank == _rank and syll[-1]-syll[0] > candidate[-1]-candidate[0]:
-                candidate = syll
-        return tuple(candidate)
+        syllabification = []
+        for boundary, nrange in zip(boundaries, nranges):  # Each word should be done independently
+            partials = [([pos], 0) for pos in range(boundary+1, nrange[0]+1)]  # First syllable must start at least as early as the first potential nucleus
+            sylbreaks = []
+            while partials:
+                partial, rank = partials.pop()
+                end = partial[-1]
+                if end in syllables:
+                    nexts = syllables[end]
+                    partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
+                else:  # We've reached the end of this path!
+                    if end >= nrange[1]:  # Last syllable must end at least as late as the last potential nucleus
+                        sylbreaks.append((partial, rank))
+            # Correct rank according to how many extrasyllabic segments there are?
+            # Find most optimal and add it to the final syllabification
+            if not sylbreaks:
+                return ()
+            _rank = sylbreaks[0][1] + 1
+            for syl, rank in sylbreaks:
+                if rank < _rank or rank == _rank and syl[-1]-syl[0] > candidate[-1]-candidate[0]:
+                    candidate = syl
+            syllabification.extend(syl)
+        return tuple(syllabification)
 
 # == Functions == #
 def resolve_target_reference(seq, tar):
