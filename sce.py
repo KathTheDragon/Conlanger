@@ -38,7 +38,7 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from .core import LangException, FormatError, Cat, Word, parse_syms, parse_cats, split
+from .core import LangException, FormatError, Cat, Word, parse_pattern, parse_cats, split
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -72,7 +72,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         apply       -- apply the rule to a word
         check_match -- check if the match is valid
     '''
-        
+    
     __slots__ = ()
     
     def __repr__(self):
@@ -83,7 +83,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     
     def __eq__(self, other):
         return self[1:] == other[1:]
-        
+    
     def apply(self, word):
         '''Apply the sound change rule to a single word.
         
@@ -294,16 +294,7 @@ def compile_ruleset(ruleset, cats=None):
             if rule.count('=') > 1:
                 logger.warning(f'Category `{rule}` failed to compile due to bad formatting: category definitions can only have one "="')
                 continue
-            cop = rule.index('=')
-            op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
-            name, vals = rule.split(op)
-            name, vals = name.strip(), vals.strip()
-            if name != '':
-                exec(f'cats[name] {op} Cat(vals, cats)')
-                if not cats[name]:
-                    del cats[name]
-            else:
-                logger.warning(f'Category `{rule}` failed to compile due to bad formatting: category definitions must have a non-empty name')
+            cats = parse_cats(rule, cats)
         elif rule.startswith('!'):  # Meta-rule
             _ruleset.append(rule.strip('!'))
     # Second pass to create blocks
@@ -420,9 +411,9 @@ def parse_tars(tars, cats=None):
                 indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, '|', minimal=True))
             except ValueError:
                 raise FormatError(f'indices must be a pipe-separated (`|`) list of numbers: {_tar}')
-            tar = (parse_syms(tar, cats), indices)
+            tar = (parse_pattern(tar, cats), indices)
         else:
-            tar = parse_syms(tar, cats)
+            tar = parse_pattern(tar, cats)
         _tars.append(tar)
     return _tars
 
@@ -454,7 +445,7 @@ def parse_reps(reps, cats=None):
             else:  # Environment
                 rep = (mode, parse_envs(rep, cats))
         else:  # Replace rule
-            rep = parse_syms(rep, cats)
+            rep = parse_pattern(rep, cats)
         _reps.append(rep)
     return _reps
 
@@ -480,7 +471,7 @@ def parse_envs(envs, cats=None):
             if env.count('_') > 1:
                 raise FormatError(f'local environments must have exactly one `_`: {_env}')
             env = env.split('_')
-            env = [parse_syms(env[0], cats), parse_syms(env[1], cats)]
+            env = [parse_pattern(env[0], cats), parse_pattern(env[1], cats)]
         elif '@' in env:  # Indexed global environment
             if env.count('@') > 1:
                 raise FormatError(f'indexed global environments must have exactly one `@`: {_env}')
@@ -489,9 +480,9 @@ def parse_envs(envs, cats=None):
                 indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, ',', minimal=True))
             except ValueError:
                 raise FormatError(f'lndices must be a comma-separated list of numbers: {_env}')
-            env = [(parse_syms(env, cats), indices)]
+            env = [(parse_pattern(env, cats), indices)]
         else:  # Global environment
-            env = [parse_syms(env, cats)]
+            env = [parse_pattern(env, cats)]
         if env in ([[]], [[],[]]):
             env = []
         _envs.append(env)
@@ -502,7 +493,7 @@ def parse_flags(flags):
     
     Arguments:
         flags -- the flags to be parsed (str)
-        
+    
     Returns a namedtuple.
     '''
     _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
@@ -588,4 +579,3 @@ apply_ruleset = run
 
 # Setup logging
 setup_logging()
-

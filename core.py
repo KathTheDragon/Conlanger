@@ -5,12 +5,19 @@ Exceptions:
     FormatError   -- Error for incorrect formatting
 
 Classes:
-    Cat    -- represents a category of phonemes
-    Word   -- represents a run of text
+    Cat              -- represents a category of phonemes
+    Word             -- represents a run of text
+    RulesSyllabifier -- syllabifies a word based on a set of rules
+    PhonoSyllabifier -- syllabifies a word based on phonotactics
 
 Functions:
-    parse_syms -- parses a string using pattern notation
-    split      -- splits a string
+    resolve_target_reference -- substitutes a target into a pattern list
+    slice_indices  -- returns absolute indices for slice indices on an iterable
+    parse_patterns -- parses a set of patterns using pattern notation
+    parse_pattern  -- parses a string using pattern notation
+    parse_cats     -- parses a set of categories
+    parse_word     -- parses a string of graphemes
+    split          -- splits a string
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
@@ -51,33 +58,36 @@ class lazyproperty(object):
     def __init__(self, fget):
         self.fget = fget
         self.func_name = fget.__name__
-
+    
     def __get__(self, obj, cls):
         if obj is None:
             return None
         value = self.fget(obj)
         setattr(obj, self.func_name, value)
         return value
-    
+
 # == Classes == #
 class Cat(list):
     '''Represents a category of graphemes.'''
     
-    __slots__ = ()
+    __slots__ = ('name',)
     
-    def __init__(self, values=None, cats=None):
+    def __init__(self, values=None, cats=None, name=None):
         '''Constructor for Cat.
         
         Arguments:
             values -- the values in the category (str, list)
             cats   -- dictionary of categories (dict)
+            name   -- optional name for the category
         '''
+        self.name = name
         _values = []
         if values is None:
             values = []
         elif isinstance(values, str):  # We want an iterable with each value as an element
             values = split(values, ',', minimal=True)
         for value in values:
+            value = value.strip()
             if isinstance(value, Cat):  # Another category
                 _values.extend(value)
             elif '[' in value:
@@ -163,22 +173,7 @@ class Word(list):
         return f"Word('{self!s}')"
     
     def __str__(self):
-        word = test = ''
-        separator = self.graphs[0]
-        polygraphs = (graph for graph in self.graphs if len(graph) > 1)
-        for graph in self:
-            if not any(graph in poly for poly in polygraphs):
-                test = ''  # Can't ever be ambiguous
-            elif not test:
-                test = graph  # Nothing earlier to be ambiguous with
-            else:
-                test += graph
-                if any(test == poly or poly in test for poly in polygraphs):
-                    word += separator  # Ambiguous, so add the separator
-                    test = graph
-                elif not any(test in poly for poly in polygraphs):
-                    test = test[1:]  # Could still be ambiguous with something later
-            word += graph
+        word = unparse_word(self, self.graphs)
         return word.strip(separator+'#').replace('#', ' ')
     
     def __contains__(self, item):
@@ -353,7 +348,7 @@ class Word(list):
             else:  # Total match failure
                 return False, 0, []
         return True, (pos-spos)*step, catixes
-        
+    
     def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
         
@@ -606,7 +601,7 @@ def parse_patterns(patterns, cats=None):
             if isinstance(pattern, list):
                 _patterns.append(pattern)
             else:
-                _patterns.append(parse_syms(pattern, cats))
+                _patterns.append(parse_pattern(pattern, cats))
     elif isinstance(patterns, dict):
         _patterns = {key: [] for key in patterns}
         for key, val in patterns.items():
@@ -615,15 +610,17 @@ def parse_patterns(patterns, cats=None):
                 pattern = pattern.split('//')[0]
                 if not pattern:
                     continue
-                _patterns[key].append(parse_syms(pattern, cats))
+                _patterns[key].append(parse_pattern(pattern, cats))
+    else:
+        _patterns = None
     return _patterns
 
-def parse_syms(syms, cats=None):
+def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
     
     Arguments:
-        syms -- the input string using pattern notation (str)
-        cats -- a list of cats to use for interpreting categories (list)
+        pattern -- the input string using pattern notation (str)
+        cats    -- a list of cats to use for interpreting categories (list)
     
     Returns a list
     '''
@@ -635,60 +632,68 @@ def parse_syms(syms, cats=None):
         cats['graphs'] = Cat("'")
     cats['graphs'] += ['**', '*?', '**?']  # Easiest way to have multi-letter symbols parse correctly
     for char in '([{}])':
-        syms = syms.replace(char, f' {char} ')
-    syms = split(syms, ' ', nesting=(0, '([{', '}])'), minimal=True)
-    for i in reversed(range(len(syms))):
-        syms[i] = syms[i].replace(' ', '')
-        if not syms[i]:
-            del syms[i]
-        elif syms[i][0] == '(':  # Optional - parse to list
-            syms[i] = parse_syms(syms[i][1:-1], cats)
-        elif syms[i][0] == '[':  # Category - parse to Cat
-            syms[i] = syms[i][1:-1]
-            if ',' in syms[i]:  # Nonce cat
-                syms[i] = Cat(syms[i], cats)
+        pattern = pattern.replace(char, f' {char} ')
+    pattern = split(pattern, ' ', nesting=(0, '([{', '}])'), minimal=True)
+    for i in reversed(range(len(pattern))):
+        pattern[i] = pattern[i].replace(' ', '')
+        if not pattern[i]:
+            del pattern[i]
+        elif pattern[i][0] == '(':  # Optional - parse to list
+            pattern[i] = parse_pattern(pattern[i][1:-1], cats)
+        elif pattern[i][0] == '[':  # Category - parse to Cat
+            pattern[i] = pattern[i][1:-1]
+            if ',' in pattern[i]:  # Nonce cat
+                pattern[i] = Cat(pattern[i], cats)
             else:  # Named cat
-                syms[i] = cats[syms[i]]
-        elif syms[i][0] == '{':  # Numbers - a few types of this
-            syms[i] = syms[i][1:-1]
-            if syms[i][0] in '=<>':  # Comparison - parse to tuple
-                op = syms[i][0]
-                if syms[i][1] == '=' or op == '=':
+                pattern[i] = cats[pattern[i]]
+        elif pattern[i][0] == '{':  # Numbers - a few types of this
+            pattern[i] = pattern[i][1:-1]
+            if pattern[i][0] in '=<>':  # Comparison - parse to tuple
+                op = pattern[i][0]
+                if pattern[i][1] == '=' or op == '=':
                     op += '='
-                syms[i] = (op, int(syms[i].strip('=<>')))
-            elif syms[i].startswith('*'):  # Wildcard repetition - parse to tuple
-                syms[i] = (syms[i],)
+                pattern[i] = (op, int(pattern[i].strip('=<>')))
+            elif pattern[i].startswith('*'):  # Wildcard repetition - parse to tuple
+                pattern[i] = (pattern[i],)
             else:  # Repetitions - parse to int
-                syms[i] = int(syms[i])
+                pattern[i] = int(pattern[i])
         else:  # Text - parse as word
-            syms[i:i+1] = parse_word(syms[i], cats['graphs'])
-    for i in reversed(range(len(syms))):  # Second pass to evaluate repetitions and ?
-        if isinstance(syms[i], int):
-            syms[i-1:i+1] = [syms[i-1]]*syms[i]
-        elif syms[i] == '?':
-            if isinstance(syms[i-1], list) and not isinstance(syms[i-1], Cat):  # Optional
-                syms[i-1].append('?')
-                del syms[i]
-    return syms
+            pattern[i:i+1] = parse_word(pattern[i], cats['graphs'])
+    for i in reversed(range(len(pattern))):  # Second pass to evaluate repetitions and ?
+        if isinstance(pattern[i], int):
+            pattern[i-1:i+1] = [pattern[i-1]]*pattern[i]
+        elif pattern[i] == '?':
+            if isinstance(pattern[i-1], list) and not isinstance(pattern[i-1], Cat):  # Optional
+                pattern[i-1].append('?')
+                del pattern[i]
+    return pattern
 
-def parse_cats(cats):
+def parse_cats(cats, initial_cats=None):
     '''Parses a set of categories.
     
     Arguments:
         cats -- the set of categories to be parsed (str)
+        initial_cats -- prior categories (dict)
     
     Returns a dict.
     '''
+    if initial_cats is None:
+        _cats = {}
+    else:
+        _cats = initial_cats.copy()
     if isinstance(cats, str):
         cats = cats.splitlines()
-    _cats = {}
     if isinstance(cats, list):
         for cat in cats:
             if '=' in cat:
-                name, values = cat.split('=')
+                cop = rule.index('=')
+                op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
+                name, values = cat.split(op)
                 name, values = name.strip(), values.strip()
                 if name != '' and values != '':
-                    _cats[name] = Cat(values, _cats)
+                    exec(f'_cats[name] {op} Cat(vals, _cats, name)')
+                    if not cats[name]:
+                        del cats[name]
     elif isinstance(cats, dict):
         for cat in cats:
             if cat == '' or not cats[cat]:
@@ -696,7 +701,7 @@ def parse_cats(cats):
             elif isinstance(cats[cat], Cat):
                 _cats[cat] = cats[cat]
             else:
-                _cats[cat] = Cat(cats[cat], _cats)  # meow
+                _cats[cat] = Cat(cats[cat], _cats, cat)  # meow
     for cat in list(_cats):  # Discard blank categories
         if not _cats[cat]:
             del _cats[cat]
@@ -719,7 +724,7 @@ def parse_word(word, graphs=None):
     #             Remove the graph from test, and remove leading instances of separator
     test = ''
     if graphs is None:
-        graphs = ["'"]
+        graphs = ("'",)
     separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
     graphemes = []
@@ -732,6 +737,27 @@ def parse_word(word, graphs=None):
                     test = test[i:].lstrip(separator)
                     break
     return graphemes
+
+def unparse_word(wordin, graphs=None):
+    word = test = ''
+    if graphs is None:
+        graphs = ("'",)
+    separator = graphs[0]
+    polygraphs = [graph for graph in graphs if len(graph) > 1]
+    for graph in wordin:
+        if not any(graph in poly for poly in polygraphs):
+            test = ''  # Can't ever be ambiguous
+        elif not test:
+            test = graph  # Nothing earlier to be ambiguous with
+        else:
+            test += graph
+            if any(poly in test for poly in polygraphs):
+                word += separator  # Ambiguous, so add the separator
+                test = graph
+            elif not any(test in poly for poly in polygraphs):
+                test = test[1:]  # Could still be ambiguous with something later
+        word += graph
+    return word
 
 def split(string, sep=None, nesting=None, minimal=False):
     '''Nesting-aware string splitting.
@@ -766,4 +792,3 @@ def split(string, sep=None, nesting=None, minimal=False):
                 result.append(string)
             break
     return result
-
