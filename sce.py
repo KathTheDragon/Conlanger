@@ -98,20 +98,20 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         # Get all target matches, filtered by given indices
         logger.debug('Begin matching targets')
         matches = []
-        for i in range(len(self.tars)):
-            if isinstance(self.tars[i], tuple):
-                tar, indices = self.tars[i]
-            elif isinstance(self.tars[i], list):
-                tar, indices = self.tars[i], ()
+        for i, tar in enumerate(self.tars):
+            if isinstance(tar, tuple):
+                tar, indices = tar
+            elif isinstance(tar, list):
+                tar, indices = tar, ()
             else:
                 tar, indices = [], ()
             logger.debug(f'> Matching `{tar}@{indices}`')
             _matches = []
             for pos in range(1, len(word)):  # Find all matches
-                match, length, catixes = word.match_pattern(tar, pos)
+                match, rpos, catixes = word.match_pattern(tar, pos)
                 if match:  # tar matches at pos
-                    logger.debug(f'>> Target matched `{word[pos:pos+length]}` at {pos}')
-                    _matches.append((pos, length, catixes, i))
+                    logger.debug(f'>> Target matched `{word[pos:rpos]}` at {pos}')
+                    _matches.append((pos, rpos, catixes, i))
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
@@ -162,10 +162,10 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         return word
     
     def check_match(self, match, word):
-        pos, length = match[:2]
-        if any(word.match_env(exc, pos, length) for exc in self.excs):  # If there are exceptions, does any match?
+        pos, rpos = match[:2]
+        if any(word.match_env(exc, pos, rpos) for exc in self.excs):  # If there are exceptions, does any match?
             logger.debug('>> Matched an exception, check the "else" rule')
-        elif any(word.match_env(env, pos, length) for env in self.envs):  # Does any environment match?
+        elif any(word.match_env(env, pos, rpos) for env in self.envs):  # Does any environment match?
             logger.debug('>> Matched an environment, check succeeded')
             return 1
         elif self.excs:  # Are there exceptions?
@@ -298,9 +298,8 @@ def compile_ruleset(ruleset, cats=None):
         elif rule.startswith('!'):  # Meta-rule
             _ruleset.append(rule.strip('!'))
     # Second pass to create blocks
-    for i in reversed(range(len(_ruleset))):
-        if isinstance(_ruleset[i], str):
-            rule = _ruleset[i]
+    for i, rule in reversed(list(enumerate(_ruleset))):
+        if isinstance(rule, str):
             rule = regexes[-1].sub(r'\1', rule)  # Clear extra whitespace
             if ' ' in rule:
                 rule, flags = rule.split()
@@ -479,7 +478,7 @@ def parse_envs(envs, cats=None):
             try:
                 indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, ',', minimal=True))
             except ValueError:
-                raise FormatError(f'lndices must be a comma-separated list of numbers: {_env}')
+                raise FormatError(f'indices must be a comma-separated list of numbers: {_env}')
             env = [(parse_pattern(env, cats), indices)]
         else:  # Global environment
             env = [parse_pattern(env, cats)]

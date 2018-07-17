@@ -22,15 +22,13 @@ Functions:
 ==================================== To-do ====================================
 === Bug-fixes ===
 catixes in Word.match_pattern should be redone to cope with non-linearity
-PhonoSyllabifier can't deal with medial word breaks
 
 === Implementation ===
 Break out format checking into separate functions
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 After everything, look into using metaclasses in Word
-Replace super-disgusting hacky workaround in Word.match_env with something better
+Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
 Might want to add a check for strings in Word.__add__
-Maybe try to flatten optionals to avoid pathological nestings as far as possible
 Maybe replace the default syllabifier with something that actually lets words syllabify
 PhonoSyllabifier needs to allow constraints
 
@@ -225,17 +223,13 @@ class Word(list):
     def strip(self, chars=None):
         if chars is None:
             chars = '#'
-        for i in range(len(self)):
-            if self[i] not in chars:
-                start = i
-                break
-        else:
-            self[:] = []
-            return
-        for i in reversed(range(len(self))):
-            if self[i] not in chars:
-                end = i+1
-                break
+        start = end = None
+        for i, char in enumerate(self):
+            if char not in chars:
+                if start is not None:
+                    start = i
+                if self[i+1] in chars:
+                    end = i+1
         return self[start:end]
     
     def find(self, sub, start=None, end=None):
@@ -270,24 +264,27 @@ class Word(list):
     def match_pattern(self, seq, start=None, end=None, step=1):
         '''Match a pattern sequence to the word.
         
-        Return if the sequence matches the end of the given slice of the word, the length of the match, and category indexes.
+        Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
         
         Arguments:
             seq -- the sequence being matched
             start, end, step -- determine the slice of the word to match within
-            pos -- the initial position in the word
-            ix  -- the initial position in the sequence
         
         Returns a tuple.
         '''
         start, end = slice_indices(self, start, end)
         end = end-1
         pos = start if step > 0 else end
-        spos = pos
         ix = 0 if step > 0 else (len(seq) - 1)
         istep = 1 if step > 0 else -1
         stack = []  # This stores the positions in the word and sequence that we branched at
         catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
+        # Hacky thing for now to make wildcard repetitions actually work in rtl
+        seq = seq.copy()
+        if step < 0:
+            for i, token in enumerate(seq):
+                if isinstance(token, tuple) and token[0].startswith('*'):
+                    left[i-1:i+1] = reversed(left[i-1:i+1])
         while 0 <= ix < len(seq):
             matched = False
             length = step
@@ -347,46 +344,39 @@ class Word(list):
                 pos, ix = stack.pop()
             else:  # Total match failure
                 return False, 0, []
-        return True, (pos-spos)*step, catixes
+        return True, pos, catixes
     
-    def match_env(self, env, pos=0, length=0):  # Test if the env matches the word
+    def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
         
         Arguments:
-            env    -- the environment to be matched (list)
-            pos    -- the index of the left edge of the target (int)
-            length -- the length of the target (int)
+            env  -- the environment to be matched (list)
+            pos  -- the index of the left edge of the target (int)
+            rpos -- the index past the right edge of the target (int)
         
         Returns a bool
         '''
         if isinstance(env, tuple):
-            return all(self.match_env(e, pos, length) for e in env)
+            return all(self.match_env(e, pos, rpos) for e in env)
         env = env.copy()
-        tar = self[pos:pos+length]
-        for j in range(len(env)):
-            if isinstance(env[j], tuple):
-                env[j] = (resolve_target_reference(env[j][0], tar), env[j][1])
-            else:
-                env[j] = resolve_target_reference(env[j], tar)
+        tar = self[pos:rpos]
         if len(env) == 0:  # Blank environment
             return True
         elif len(env) == 1:  # Global environment
-            return env[0] in self
-        else:  # Local environment
-            if pos:
-                # Hacky thing for now to make wildcard repetitions actually work in the left env
-                for i in range(len(env[0])):
-                    if isinstance(env[0][i], tuple) and env[0][i][0].startswith('*'):
-                        env[0][i-1:i+1] = reversed(env[0][i-1:i+1])
-                    elif isinstance(env[0][i], list):
-                        for j in range(len(env[0][i])):
-                            if isinstance(env[0][i][j], tuple) and env[0][i][j][0].startswith('*'):
-                                env[0][i][j-1:j+1] = reversed(env[0][i][j-1:j+1])
-                matchleft = self.match_pattern(env[0], 0, pos, -1)[0]
-            else:  # At the left edge, which can only be matched by a null env
-                matchleft = False if env[0] else True
-            matchright = self.match_pattern(env[1], pos+length)[0]
-            return matchleft and matchright
+            env = env[0]
+            if isinstance(env, tuple):
+                env = (resolve_target_reference(env[0], tar), env[1])
+            else:
+                env = resolve_target_reference(env, tar)
+            return env in self
+        # Local environment
+        left, right = resolve_target_reference(env[0], tar), resolve_target_reference(env[1], tar)
+        if pos:
+            matchleft = self.match_pattern(left, 0, pos, -1)[0]
+        else:  # At the left edge, which can only be matched by a null env
+            matchleft = False if left else True
+        matchright = self.match_pattern(right, rpos)[0]
+        return matchleft and matchright
     
     def apply_match(self, match, rep):
         '''Apply a replacement to a word
@@ -398,34 +388,34 @@ class Word(list):
         
         Returns a Word.
         '''
-        pos, length, catixes = match[:3]
-        tar = self[pos:pos+length]
+        pos, rpos, catixes = match[:3]
+        tar = self[pos:rpos]
         if isinstance(rep, list):  # Replacement
             rep = rep.copy()
             # Deal with categories and ditto marks
             ix = 0
-            for i in range(len(rep)):
-                if isinstance(rep[i], Cat):
-                    rep[i] = rep[i][catixes[ix] % len(rep[i])]
+            for i, token in enumerate(rep):
+                if isinstance(token, Cat):
+                    rep[i] = token[catixes[ix] % len(token)]
                     ix = (ix + 1) % len(catixes)
-                elif rep[i] == '"':
+                elif token == '"':
                     rep[i] = rep[i-1]
             # Deal with target references
             rep = resolve_target_reference(rep, tar)
-            word = Word(list(self[:pos]) + rep + list(self[pos+length:]), self.graphs, self.syllabifier)
+            word = Word(list(self[:pos]) + rep + list(self[rpos:]), self.graphs, self.syllabifier)
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
                 matches = []
                 for wpos in range(1, len(self)):  # Find all matches
                     if any(self.match_env(env, wpos) for env in envs):
-                        if mode == 'move' and wpos >= pos + length:  # We'll need to adjust the matches down
-                            wpos -= length
+                        if mode == 'move' and wpos >= rpos:  # We'll need to adjust the matches down
+                            wpos -= rpos-pos
                         matches.append(wpos)
             else:  # Indices
                 mode, matches = rep[0:2]
             if mode == 'move':  # Move - delete original tar
-                word = self[:pos] + self[pos+length:]
+                word = self[:pos] + self[rpos:]
             else:
                 word = self[:]
             for match in sorted(matches, reverse=True):
@@ -453,14 +443,14 @@ class RulesSyllabifier:
         pos = 0
         while pos < len(word):
             for rule in self.rules:
-                match, length = word.match_pattern(rule[0], pos)[:2]
+                match, rpos = word.match_pattern(rule[0], pos)[:2]
                 if match:
                     # Compute and add breaks for this pattern
                     for ix in rule[1]:
                         if 0 < pos+ix < len(word) and pos+ix not in breaks:  # We don't want a syllable break outside the word, nor duplicates
                             breaks.append(pos+ix)
                     # Step past this match
-                    pos += length
+                    pos = rpos
                     break
             else:  # No matches here
                 pos += 1
@@ -503,22 +493,22 @@ class PhonoSyllabifier:
                     if onset == ['_'] or onset == ['#','_'] and word[npos-1] == '#':
                         onsets.append((npos, rank))
                     else:
-                        match, length = word.match_pattern(onset, None, npos, -1)[:2]
+                        match, pos = word.match_pattern(onset, None, npos, -1)[:2]
                         if match:
                             if onset[0] == '#':
-                                length -= 1
-                            onsets.append((npos-length, rank))
+                                pos += 1
+                            onsets.append((pos, rank))
                 # Get codas for this nucleus
                 codas = []
                 for rank, coda in enumerate(self.codas):
                     if coda == ['_'] or coda == ['_','#'] and word[nrpos] == '#':
                         codas.append((nrpos, rank))
                     else:
-                        match, length = word.match_pattern(coda, nrpos)[:2]
+                        match, rpos = word.match_pattern(coda, nrpos)[:2]
                         if match:
                             if coda[-1] == '#':
-                                length -= 1
-                            codas.append((nrpos+length, rank))
+                                rpos -= 1
+                            codas.append((rpos, rank))
                 # Get syllables for this nucleus
                 for opos, orank in onsets:
                     for cpos, crank in codas:
@@ -553,10 +543,10 @@ class PhonoSyllabifier:
 # == Functions == #
 def resolve_target_reference(seq, tar):
     seq = seq.copy()
-    for i in reversed(range(len(seq))):
-        if seq[i] == '%':  # Target copying
+    for i, token in reversed(list(enumerate(seq))):
+        if token == '%':  # Target copying
             seq[i:i+1] = tar
-        elif seq[i] == '<':  # Target reversal/metathesis
+        elif token == '<':  # Target reversal/metathesis
             seq[i:i+1] = reversed(tar)
     return seq
 
@@ -634,35 +624,39 @@ def parse_pattern(pattern, cats=None):
     for char in '([{}])':
         pattern = pattern.replace(char, f' {char} ')
     pattern = split(pattern, ' ', nesting=(0, '([{', '}])'), minimal=True)
-    for i in reversed(range(len(pattern))):
-        pattern[i] = pattern[i].replace(' ', '')
-        if not pattern[i]:
+    for i, token in reversed(list(enumerate(pattern))):
+        token = token.replace(' ', '')
+        if not token:
             del pattern[i]
-        elif pattern[i][0] == '(':  # Optional - parse to list
-            pattern[i] = parse_pattern(pattern[i][1:-1], cats)
-        elif pattern[i][0] == '[':  # Category - parse to Cat
-            pattern[i] = pattern[i][1:-1]
-            if ',' in pattern[i]:  # Nonce cat
-                pattern[i] = Cat(pattern[i], cats)
+        elif token[0] == '(':  # Optional - parse to list
+            token = parse_pattern(token[1:-1], cats)
+            if all(isinstance(sub, list) and not isinstance(sub, Cat) for sub in token):
+                pattern[i:i+1] = token
+            else:
+                pattern[i] = token
+        elif token[0] == '[':  # Category - parse to Cat
+            token = token[1:-1]
+            if ',' in token:  # Nonce cat
+                pattern[i] = Cat(token, cats)
             else:  # Named cat
-                pattern[i] = cats[pattern[i]]
-        elif pattern[i][0] == '{':  # Numbers - a few types of this
-            pattern[i] = pattern[i][1:-1]
-            if pattern[i][0] in '=<>':  # Comparison - parse to tuple
-                op = pattern[i][0]
-                if pattern[i][1] == '=' or op == '=':
+                pattern[i] = cats[token]
+        elif token[0] == '{':  # Numbers - a few types of this
+            token = token[1:-1]
+            if token[0] in '=<>':  # Comparison - parse to tuple
+                op = token[0]
+                if token[1] == '=' or op == '=':
                     op += '='
-                pattern[i] = (op, int(pattern[i].strip('=<>')))
-            elif pattern[i].startswith('*'):  # Wildcard repetition - parse to tuple
-                pattern[i] = (pattern[i],)
+                pattern[i] = (op, int(token.strip('=<>')))
+            elif token[0] == '*':  # Wildcard repetition - parse to tuple
+                pattern[i] = (token,)
             else:  # Repetitions - parse to int
-                pattern[i] = int(pattern[i])
+                pattern[i] = int(token)
         else:  # Text - parse as word
-            pattern[i:i+1] = parse_word(pattern[i], cats['graphs'])
-    for i in reversed(range(len(pattern))):  # Second pass to evaluate repetitions and ?
-        if isinstance(pattern[i], int):
-            pattern[i-1:i+1] = [pattern[i-1]]*pattern[i]
-        elif pattern[i] == '?':
+            pattern[i:i+1] = parse_word(token, cats['graphs'])
+    for i, token in reversed(list(enumerate(pattern))):  # Second pass to evaluate repetitions and ?
+        if isinstance(token, int):
+            pattern[i-1:i+1] = [pattern[i-1]]*token
+        elif token == '?':
             if isinstance(pattern[i-1], list) and not isinstance(pattern[i-1], Cat):  # Optional
                 pattern[i-1].append('?')
                 del pattern[i]
@@ -724,7 +718,7 @@ def parse_word(word, graphs=None):
     #             Remove the graph from test, and remove leading instances of separator
     test = ''
     if graphs is None:
-        graphs = ("'",)
+        return list(word)
     separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
     graphemes = []
@@ -778,14 +772,14 @@ def split(string, sep=None, nesting=None, minimal=False):
     while True:
         if minimal and (nesting is None or depth == nesting[0]):
             string = string.lstrip(sep)
-        for i in range(len(string)):
-            if string[i] in sep and (nesting is None or depth == nesting[0]):
+        for i, char in enumerate(string):
+            if char in sep and (nesting is None or depth == nesting[0]):
                 result.append(string[:i])
                 string = string[i+1:]
                 break
-            elif nesting is not None and string[i] in nesting[1]:
+            elif nesting is not None and char in nesting[1]:
                 depth += 1
-            elif nesting is not None and string[i] in nesting[2]:
+            elif nesting is not None and char in nesting[2]:
                 depth -= 1
         else:
             if not minimal or string != '':
