@@ -5,9 +5,9 @@ Classes:
     Language -- represents a language
 
 Functions:
-    parse_patterns -- parse a string of generation patterns
-    load_lang      -- load the data from the named language file
-    save_lang      -- save the given language's data to file
+    unparse_pattern -- unparse a generation pattern back to a string
+    load_lang       -- load the data from the named language file
+    save_lang       -- save the given language's data to file
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===

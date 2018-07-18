@@ -576,7 +576,7 @@ def parse_patterns(patterns, cats=None):
     '''Parses generation patterns.
     
     Arguments:
-        patterns -- set of patterns to parse (str or list)
+        patterns -- set of patterns to parse (str, list, or dict)
     
     Returns a list
     '''
@@ -595,14 +595,9 @@ def parse_patterns(patterns, cats=None):
             else:
                 _patterns.append(parse_pattern(pattern, cats))
     elif isinstance(patterns, dict):
-        _patterns = {key: [] for key in patterns}
-        for key, val in patterns.items():
-            for pattern in val:
                 #Remove comments
                 pattern = pattern.split('//')[0]
-                if not pattern:
-                    continue
-                _patterns[key].append(parse_pattern(pattern, cats))
+        _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
     else:
         _patterns = None
     return _patterns
