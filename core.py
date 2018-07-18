@@ -26,7 +26,6 @@ catixes in Word.match_pattern should be redone to cope with non-linearity
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
-Might want to add a check for strings in Word.__add__
 
 === Features ===
 Something something punctuation
@@ -189,11 +188,13 @@ class Word(list):
     __delitem__ = None
     
     def __add__(self, other):
+        graphs = self.graphs
         if isinstance(other, Word):
-            graphs = self.graphs + other.graphs[1:]
-        else:
-            graphs = self.graphs
-        return Word(list(self) + list(other), graphs, self.syllabifier)
+            graphs += other.graphs[1:]
+            other = list(other)
+        elif isinstance(other, str):
+            other = parse_word(other, graphs)
+        return Word(list(self) + other, graphs, self.syllabifier)
     
     def __mul__(self, other):
         return Word(list(self) * other, self.graphs, self.syllabifier)
