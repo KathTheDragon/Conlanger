@@ -470,16 +470,17 @@ class PhonoSyllabifier:
         boundaries = []  # List of word boundaries
         nranges = []  # List of pairs denoting the full range of potential nuclei within each word
         syllables = {}
-        for npos in range(len(word)-1):
-            if word[npos] == '#':
-                boundaries.append(npos)
+        for wpos in range(len(word)-1):
+            if word[wpos] == '#':
+                boundaries.append(wpos)
                 nranges.append(None)
-            # Find all possible nuclei
+            # Find all possible syllables for each possible nuclei
             for nrank, nucleus in enumerate(self.nuclei):
-                match, nlength = word.match_pattern(nucleus, npos)[:2]
+                npos = wpos
+                match, nrpos = word.match_pattern(nucleus, npos)[:2]  # Check for a nucleus
                 if not match:
                     continue
-                nrpos = npos+nlength
+                # Exclude word boundaries
                 if nucleus[0] == '#':
                     npos += 1
                 if nucleus[-1] == '#':
@@ -519,7 +520,7 @@ class PhonoSyllabifier:
         # Obtain potential syllabifications
         syllabification = []
         for boundary, nrange in zip(boundaries, nranges):  # Each word should be done independently
-            partials = [([pos], 0) for pos in range(boundary+1, nrange[0]+1)]  # First syllable must start at least as early as the first potential nucleus
+            partials = [([pos], pos-(boundary+1)) for pos in range(boundary+1, nrange[0]+1)]  # First syllable must start at least as early as the first potential nucleus
             sylbreaks = []
             while partials:
                 partial, rank = partials.pop()
@@ -529,8 +530,7 @@ class PhonoSyllabifier:
                     partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
                 else:  # We've reached the end of this path!
                     if end >= nrange[1]:  # Last syllable must end at least as late as the last potential nucleus
-                        sylbreaks.append((partial, rank))
-            # Correct rank according to how many extrasyllabic segments there are?
+                        sylbreaks.append([partial, rank-(end-nrange[1])])
             # Find most optimal and add it to the final syllabification
             if not sylbreaks:
                 return ()
@@ -538,7 +538,8 @@ class PhonoSyllabifier:
             for syl, rank in sylbreaks:
                 if rank < _rank or rank == _rank and syl[-1]-syl[0] > candidate[-1]-candidate[0]:
                     candidate = syl
-            syllabification.extend(syl)
+                    _rank = rank
+            syllabification.extend(candidate)
         return tuple(syllabification)
 
 # == Functions == #
