@@ -84,9 +84,10 @@ class Cat(list):
             value = value.strip()
             if isinstance(value, Cat):  # Another category
                 _values.extend(value)
-            elif '[' in value:
-                if cats is not None and value.strip('[]') in cats:
-                    _values.extend(cats[value.strip('[]')])
+            elif value[0] == '[':
+                value = value.strip('[]')
+                if cats is not None and value in cats:
+                    _values.extend(cats[value])
                 else:
                     continue
             else:
