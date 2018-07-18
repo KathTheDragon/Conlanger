@@ -24,13 +24,9 @@ Functions:
 catixes in Word.match_pattern should be redone to cope with non-linearity
 
 === Implementation ===
-Break out format checking into separate functions
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
-After everything, look into using metaclasses in Word
 Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
 Might want to add a check for strings in Word.__add__
-Maybe replace the default syllabifier with something that actually lets words syllabify
-PhonoSyllabifier needs to allow constraints
 
 === Features ===
 Something something punctuation
@@ -172,7 +168,7 @@ class Word(list):
     
     def __str__(self):
         word = unparse_word(self, self.graphs)
-        return word.strip(separator+'#').replace('#', ' ')
+        return word.strip(self.graphs[0]+'#').replace('#', ' ')
     
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
@@ -261,13 +257,13 @@ class Word(list):
                     return pos
         return -1
     
-    def match_pattern(self, seq, start=None, end=None, step=1):
+    def match_pattern(self, pattern, start=None, end=None, step=1):
         '''Match a pattern sequence to the word.
         
         Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
         
         Arguments:
-            seq -- the sequence being matched
+            pattern -- the sequence being matched
             start, end, step -- determine the slice of the word to match within
         
         Returns a tuple.
@@ -275,28 +271,28 @@ class Word(list):
         start, end = slice_indices(self, start, end)
         end = end-1
         pos = start if step > 0 else end
-        ix = 0 if step > 0 else (len(seq) - 1)
+        ix = 0 if step > 0 else (len(pattern) - 1)
         istep = 1 if step > 0 else -1
         stack = []  # This stores the positions in the word and sequence that we branched at
         catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
         # Hacky thing for now to make wildcard repetitions actually work in rtl
-        seq = seq.copy()
+        pattern = pattern.copy()
         if step < 0:
-            for i, token in enumerate(seq):
+            for i, token in enumerate(pattern):
                 if isinstance(token, tuple) and token[0].startswith('*'):
-                    left[i-1:i+1] = reversed(left[i-1:i+1])
-        while 0 <= ix < len(seq):
+                    pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
+        while 0 <= ix < len(pattern):
             matched = False
             length = step
             ilength = istep
             if start <= pos <= end:  # Still in the slice
-                seg = seq[ix]
-                if isinstance(seg, str):
-                    if seg.startswith('*'):  # Wildcard
+                token = pattern[ix]
+                if isinstance(token, str):
+                    if token.startswith('*'):  # Wildcard
                         wrange = range(pos+step, (end if step > 0 else start)+step, step)
-                        if '?' in seg:  # Non-greedy
+                        if '?' in token:  # Non-greedy
                             wrange = wrange[::-1]
-                        if '**' in seg:  # Extended
+                        if '**' in token:  # Extended
                             for wpos in wrange:
                                 # wpos is always valid if wildcard is extended
                                 stack.append((wpos, ix+istep))
@@ -305,35 +301,35 @@ class Word(list):
                                 # otherwise wpos is valid if not matching '#'
                                 if '#' not in self[pos:wpos:step]:
                                     stack.append((wpos, ix+istep))
-                    elif seg == '"':  # Ditto mark
+                    elif token == '"':  # Ditto mark
                         matched = self[pos] == self[pos-1]
-                    elif seg == '$':  # Syllable break
+                    elif token == '$':  # Syllable break
                         matched = (pos in self.syllables)
                         length = 0
                     else:  # Grapheme
-                        matched = self[pos] == seg
-                elif isinstance(seg, Cat):  # Category
-                    if self[pos] in seg:  # This may change if categories are allowed to contain sequences
+                        matched = self[pos] == token
+                elif isinstance(token, Cat):  # Category
+                    if self[pos] in token:  # This may change if categories are allowed to contain sequences
                         matched = True
-                        catixes.append(seg.index(self[pos]))
-                elif isinstance(seg, list):  # Optional sequence
+                        catixes.append(token.index(self[pos]))
+                elif isinstance(token, list):  # Optional sequence
                     mode = 'g'
-                    jump = len(seg)
+                    jump = len(token)
                     ilength = 0
-                    if seg[-1] == '?':  # Non-greedy
-                        seg = seg[:-1]
+                    if token[-1] == '?':  # Non-greedy
+                        token = token[:-1]
                         mode = 'ng'
                     if (istep == 1) ^ (mode == 'g'):
                         jump = 0
-                        ilength = len(seg)
+                        ilength = len(token)
                     if istep == -1:
                         jump += istep
                         ilength += istep
                     stack.append((pos, ix+jump))
-                    seq = seq[:ix] + seg + seq[ix+1:]
+                    pattern = pattern[:ix] + token + pattern[ix+1:]
                     matched = True
                     length = 0
-                elif isinstance(seg, tuple) and seg[0].startswith('*'):  # Presently only wildcard repetitions; slight problem with rtl
+                elif isinstance(token, tuple) and token[0].startswith('*'):  # Presently only wildcard repetitions
                     stack.append((pos, ix-istep))
                     matched = True
                     length = 0

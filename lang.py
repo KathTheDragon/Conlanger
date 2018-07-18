@@ -19,6 +19,8 @@ Maybe add different modes for each positional syllable type
 === Features ===
 Add generating every possible word/root
 Language.apply_ruleset will be replaced by calls to the diachronics module, once that exists
+Add constraints to phonotactics
+- Primarily for word gen, potentially useful for PhonoSyllabifier
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -48,7 +50,7 @@ class Language:
         gen_word      -- generate words
         apply_ruleset -- apply a sound change ruleset to a wordset
     '''
-    __slots__ = ('name', 'cats', '_configs', 'configs', '_phonotactics', 'phonotactics', '_syllabifier', 'syllabifier')
+    __slots__ = ('name', 'cats', 'configs', 'phonotactics', 'syllabifier')
     
     def __init__(self, name='', cats=None, configs=None, phonotactics=None, syllabifier=None):
         '''Constructor for Language().
