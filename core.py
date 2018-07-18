@@ -595,8 +595,6 @@ def parse_patterns(patterns, cats=None):
             else:
                 _patterns.append(parse_pattern(pattern, cats))
     elif isinstance(patterns, dict):
-                #Remove comments
-                pattern = pattern.split('//')[0]
         _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
     else:
         _patterns = None
