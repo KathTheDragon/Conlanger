@@ -26,6 +26,7 @@ catixes in Word.match_pattern should be redone to cope with non-linearity
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
+- How though
 
 === Features ===
 Something something punctuation
@@ -342,6 +343,8 @@ class Word(list):
                 pos, ix = stack.pop()
             else:  # Total match failure
                 return False, 0, []
+        if step < 0:
+            pos -= step
         return True, pos, catixes
     
     def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
