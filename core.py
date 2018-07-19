@@ -448,7 +448,7 @@ class RulesSyllabifier:
                 if match:
                     # Compute and add breaks for this pattern
                     for ix in rule[1]:
-                        if 0 < pos+ix < len(word) and pos+ix not in breaks:  # We don't want a syllable break outside the word, nor duplicates
+                        if 0 < pos+ix < len(word) and pos+ix not in breaks:  # Syllable breaks must be within the word and unique
                             breaks.append(pos+ix)
                     # Step past this match
                     pos = rpos
@@ -490,27 +490,9 @@ class PhonoSyllabifier:
                 else:
                     nranges[-1][1] = nrpos
                 # Get onsets for this nucleus
-                onsets = []
-                for rank, onset in enumerate(self.onsets):
-                    if onset == ['_'] or onset == ['#','_'] and word[npos-1] == '#':
-                        onsets.append((npos, rank))
-                    else:
-                        match, pos = word.match_pattern(onset, None, npos, -1)[:2]
-                        if match:
-                            if onset[0] == '#':
-                                pos += 1
-                            onsets.append((pos, rank))
+                onsets = self.get_peripheries(word, npos, 'left')
                 # Get codas for this nucleus
-                codas = []
-                for rank, coda in enumerate(self.codas):
-                    if coda == ['_'] or coda == ['_','#'] and word[nrpos] == '#':
-                        codas.append((nrpos, rank))
-                    else:
-                        match, rpos = word.match_pattern(coda, nrpos)[:2]
-                        if match:
-                            if coda[-1] == '#':
-                                rpos -= 1
-                            codas.append((rpos, rank))
+                codas = self.get_peripheries(word, nrpos, 'right')
                 # Get syllables for this nucleus
                 for opos, orank in onsets:
                     for cpos, crank in codas:
@@ -520,7 +502,7 @@ class PhonoSyllabifier:
         # Obtain potential syllabifications
         syllabification = []
         for boundary, nrange in zip(boundaries, nranges):  # Each word should be done independently
-            partials = [([pos], pos-(boundary+1)) for pos in range(boundary+1, nrange[0]+1)]  # First syllable must start at least as early as the first potential nucleus
+            partials = [([pos], pos-(boundary+1)) for pos in range(boundary+1, nrange[0]+1)]  # First potential nucleus must be syllabified
             sylbreaks = []
             while partials:
                 partial, rank = partials.pop()
@@ -529,7 +511,7 @@ class PhonoSyllabifier:
                     nexts = syllables[end]
                     partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
                 else:  # We've reached the end of this path!
-                    if end >= nrange[1]:  # Last syllable must end at least as late as the last potential nucleus
+                    if end >= nrange[1]:  # Last potential nucleus must be syllabified
                         sylbreaks.append([partial, rank-(end-nrange[1])])
             # Find most optimal and add it to the final syllabification
             if not sylbreaks:
@@ -541,6 +523,23 @@ class PhonoSyllabifier:
                     _rank = rank
             syllabification.extend(candidate)
         return tuple(syllabification)
+    
+    def get_peripheries(self, word, epos, edge):
+        left = 1 if edge == 'left' else 0
+        dir = -1 if left else 1
+        peripheries = []
+        patterns = self.onsets if left else self.codas
+        for rank, pattern in enumerate(patterns):
+            if pattern == ['_'] or pattern == ['_','#'][::dir] and word[epos-left] == '#':
+                peripheries.append((epos, rank))
+            else:
+                start, end = (epos, None)[::dir]
+                match, pos = word.match_pattern(pattern, start, end, dir)[:2]
+                if match:
+                    if pattern[left-1] == '#':
+                        pos -= dir
+                    peripheries.append((pos, rank))
+        return peripheries
 
 # == Functions == #
 def resolve_target_reference(seq, tar):
