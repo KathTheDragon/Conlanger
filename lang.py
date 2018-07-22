@@ -74,6 +74,18 @@ class Language:
             _config['sylrange'] = range(_config['sylrange'][0], _config['sylrange'][1]+1)
             self.configs[config] = Config(**_config)
         self.phonotactics = parse_patterns(phonotactics, self.cats)
+        # Need some default phonotactics instead of empty lists
+        if not self.phonotactics['onsets']:
+            self.phonotactics['onsets'] = [['_']]
+        if not self.phonotactics['codas']:
+            self.phonotactics['codas'] = [['_']]
+        while '#' in self.phonotactics['margins']:
+            ix = self.phonotactics['margins'].index('#')
+            del self.phonotactics['margins'][ix]
+        if all(m[0] != '#' for m in self.phonotactics['margins']):
+            self.phonotactics['margins'].append(['#', '_'])
+        if all(m[-1] != '#' for m in self.phonotactics['margins']):
+            self.phonotactics['margins'].append(['_', '#'])
         if syllabifier is not None:
             self.syllabifier = RulesSyllabifier(self.cats, parse_patterns(syllabifier, self.cats))
         else:
