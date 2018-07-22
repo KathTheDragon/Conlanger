@@ -30,6 +30,7 @@ Replace super-disgusting hacky wildcard repetition workaround in Word.match_patt
 
 === Features ===
 Something something punctuation
+Work out how to create syllabifier rules from phonotactics
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -448,7 +449,8 @@ class RulesSyllabifier:
                 if match:
                     # Compute and add breaks for this pattern
                     for ix in rule[1]:
-                        if 0 < pos+ix < len(word) and pos+ix not in breaks:  # Syllable breaks must be within the word and unique
+                        # Syllable breaks must be within the word and unique
+                        if 0 < pos+ix < len(word) and pos+ix not in breaks:
                             breaks.append(pos+ix)
                     # Step past this match
                     pos = rpos
@@ -458,12 +460,22 @@ class RulesSyllabifier:
         return tuple(breaks)
 
 class PhonoSyllabifier:
-    __slots__ = ('onsets', 'nuclei', 'codas')
+    __slots__ = ('onsets', 'nuclei', 'codas', 'leftmargins', 'rightmargins')
     
-    def __init__(self, cats, onsets=(), nuclei=(), codas=()):
+    def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
         self.onsets = parse_patterns(onsets, cats)
         self.nuclei = parse_patterns(nuclei, cats)
         self.codas = parse_patterns(codas, cats)
+        self.leftmargins = parse_patterns([margin for margin in margins if margin[0] == '#'], cats)
+        self.rightmargins = parse_patterns([margin for margin in margins if margin[-1] == '#'], cats)
+        if not self.onsets:
+            self.onsets = [['_']]
+        if not self.codas:
+            self.codas = [['_']]
+        if not self.leftmargins:
+            self.leftmargins = [['#', '_']]
+        if not self.rightmargins:
+            self.rightmargins = [['_', '#']]
     
     def __call__(self, word):
         # Find all possible syllables
@@ -502,7 +514,15 @@ class PhonoSyllabifier:
         # Obtain potential syllabifications
         syllabification = []
         for boundary, nrange in zip(boundaries, nranges):  # Each word should be done independently
-            partials = [([pos], pos-(boundary+1)) for pos in range(boundary+1, nrange[0]+1)]  # First potential nucleus must be syllabified
+            # Word must begin with a left margin
+            partials = []
+            for rank, margin in enumerate(self.leftmargins):
+                if margin == ['#', '_']:
+                    partials.append(([1], rank))
+                else:
+                    match, rpos = word.match_pattern(margin, 0)[:2]
+                    if match:
+                        partials.append((rpos, rank))
             sylbreaks = []
             while partials:
                 partial, rank = partials.pop()
@@ -511,8 +531,14 @@ class PhonoSyllabifier:
                     nexts = syllables[end]
                     partials.extend([(partial+[next], rank+nrank) for next, nrank in nexts])
                 else:  # We've reached the end of this path!
-                    if end >= nrange[1]:  # Last potential nucleus must be syllabified
-                        sylbreaks.append([partial, rank-(end-nrange[1])])
+                    # Word must end with a right margin
+                    for mrank, margin in enumerate(self.rightmargins):
+                        if margin == ['_', '#'] and word[end] == '#':
+                            sylbreaks.append((partial, rank+mrank))
+                        else:
+                            match = word.match_pattern(margin, end)[0]
+                            if match:
+                                sylbreaks.append((partial, rank+mrank))
             # Find most optimal and add it to the final syllabification
             if not sylbreaks:
                 return ()
@@ -530,7 +556,7 @@ class PhonoSyllabifier:
         peripheries = []
         patterns = self.onsets if left else self.codas
         for rank, pattern in enumerate(patterns):
-            if pattern == ['_'] or pattern == ['_','#'][::dir] and word[epos-left] == '#':
+            if pattern == ['_'] or pattern == ['_', '#'][::dir] and word[epos-left] == '#':
                 peripheries.append((epos, rank))
             else:
                 start, end = (epos, None)[::dir]
