@@ -310,6 +310,9 @@ class Word(list):
                     elif token == '$':  # Syllable break
                         matched = (pos in self.syllables)
                         length = 0
+                    elif token == '_':  # Null
+                        matched = step > 0 and pos != 0 or step < 0 and pos != len(self)-1
+                        length = 0
                     else:  # Grapheme
                         matched = self[pos] == token
                 elif isinstance(token, Cat):  # Category
@@ -431,6 +434,10 @@ class RulesSyllabifier:
         self.rules = []
         rules = parse_patterns(rules, cats)
         for rule in rules:  # Extract syllable breaks
+            if rule == ['#','$']:
+                rule = ['#','$','_']
+            elif rule == ['$','#']:
+                rule = ['$','_','#']
             breaks = []
             while '$' in rule:
                 ix = rule.index('$')
@@ -444,17 +451,21 @@ class RulesSyllabifier:
         # Step through the word
         pos = 0
         while pos < len(word):
-            for rule in self.rules:
-                match, rpos = word.match_pattern(rule[0], pos)[:2]
+            for rule, _breaks in self.rules:
+                if rule[0] == '#' and pos != 0:
+                    pos -= 1
+                match, rpos = word.match_pattern(rule, pos)[:2]
                 if match:
                     # Compute and add breaks for this pattern
-                    for ix in rule[1]:
+                    for ix in _breaks:
                         # Syllable breaks must be within the word and unique
                         if 0 < pos+ix < len(word) and pos+ix not in breaks:
                             breaks.append(pos+ix)
                     # Step past this match
                     pos = rpos
                     break
+                elif rule[0] == '#' and pos != 0:
+                    pos += 1
             else:  # No matches here
                 pos += 1
         return tuple(breaks)
@@ -517,12 +528,9 @@ class PhonoSyllabifier:
             # Word must begin with a left margin
             partials = []
             for rank, margin in enumerate(self.leftmargins):
-                if margin == ['#', '_']:
-                    partials.append(([1], rank))
-                else:
-                    match, rpos = word.match_pattern(margin, 0)[:2]
-                    if match:
-                        partials.append((rpos, rank))
+                match, rpos = word.match_pattern(margin, boundary)[:2]
+                if match:
+                    partials.append(([rpos], rank))
             sylbreaks = []
             while partials:
                 partial, rank = partials.pop()
@@ -533,12 +541,9 @@ class PhonoSyllabifier:
                 else:  # We've reached the end of this path!
                     # Word must end with a right margin
                     for mrank, margin in enumerate(self.rightmargins):
-                        if margin == ['_', '#'] and word[end] == '#':
+                        match = word.match_pattern(margin, end)[0]
+                        if match:
                             sylbreaks.append((partial, rank+mrank))
-                        else:
-                            match = word.match_pattern(margin, end)[0]
-                            if match:
-                                sylbreaks.append((partial, rank+mrank))
             # Find most optimal and add it to the final syllabification
             if not sylbreaks:
                 return ()
@@ -551,21 +556,85 @@ class PhonoSyllabifier:
         return tuple(syllabification)
     
     def get_peripheries(self, word, epos, edge):
-        left = 1 if edge == 'left' else 0
-        dir = -1 if left else 1
+        right = -int(edge == 'right')
+        step = 1 if right else -1
         peripheries = []
-        patterns = self.onsets if left else self.codas
+        patterns = self.codas if right else self.onsets
         for rank, pattern in enumerate(patterns):
-            if pattern == ['_'] or pattern == ['_', '#'][::dir] and word[epos-left] == '#':
-                peripheries.append((epos, rank))
-            else:
-                start, end = (epos, None)[::dir]
-                match, pos = word.match_pattern(pattern, start, end, dir)[:2]
-                if match:
-                    if pattern[left-1] == '#':
-                        pos -= dir
-                    peripheries.append((pos, rank))
+            start, end = (epos, None)[::step]
+            match, pos = word.match_pattern(pattern, start, end, step)[:2]
+            if match:
+                if pattern[right] == '#':
+                    pos -= step
+                peripheries.append((pos, rank))
         return peripheries
+
+class PhonoRulesSyllabifier:
+    slots = ('rules',)
+    
+    def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
+        # Generate initial rules - left margin + onset + nucleus
+        self.rules = []
+        rules = self.get_non_finals(onsets, nuclei, margins, True)
+        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+        # Generate medial rules - coda + onset + nucleus
+        rules = self.get_non_finals(onsets, nuclei, codas)
+        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+        # Generate final rules - coda + right margin
+        rules = self.get_finals(codas, margins)
+        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+    
+    @staticmethod
+    def get_non_finals(onsets, nuclei, codas, initial=False):
+        rules = []
+        if initial:
+            codas = [coda for coda in codas if coda[0] == '#']
+        for crank, coda in enumerate(codas):
+            if coda[-1] == '#':
+                continue
+            elif coda[-1] == '_':
+                coda = coda[:-1]
+            for orank, onset in enumerate(onsets):
+                if onset[0] == '#':
+                    if initial and coda == ['#']:
+                        onset = onset[1:]
+                    else:
+                        continue
+                if onset == ['_']:
+                    onset = []
+                for nrank, nucleus in enumerate(nuclei):
+                    if nucleus[0] == '#':
+                        if initial and onset == []:
+                            nucleus = nucleus[1:]
+                        else:
+                            continue
+                    pattern = coda + onset + nucleus
+                    breaks = [len(coda)]
+                    if pattern[-1] == '#':
+                        breaks.append(len(pattern)-1)
+                    rank = crank + orank + nrank
+                    rules.append((pattern, breaks, rank))
+        return rules
+    
+    @staticmethod
+    def get_finals(codas, margins):
+        rules = []
+        for mrank, margin in enumerate([margin for margin in margins if margin[-1] == '#']):
+            if margin == ['_', '#']:
+                margin = ['#']
+            for crank, coda in enumerate(codas):
+                if coda[-1] == '#':
+                    if margin == ['#']:
+                        coda = coda[:-1]
+                    else:
+                        continue
+                pattern = coda + margin
+                breaks = [0 if coda == ['_'] else len(coda)]
+                rank = crank + mrank
+                rules.append((pattern, breaks, rank))
+        return rules
+    
+    __call__ = RulesSyllabifier.__call__
 
 # == Functions == #
 def resolve_target_reference(seq, tar):
