@@ -798,14 +798,14 @@ def parse_cats(cats, initial_cats=None):
     if isinstance(cats, list):
         for cat in cats:
             if '=' in cat:
-                cop = rule.index('=')
-                op = (rule[cop-1] if rule[cop-1] in '+-' else '') + '='
+                cop = cat.index('=')
+                op = (cat[cop-1] if cat[cop-1] in '+-' else '') + '='
                 name, values = cat.split(op)
                 name, values = name.strip(), values.strip()
                 if name != '' and values != '':
-                    exec(f'_cats[name] {op} Cat(vals, _cats, name)')
-                    if not cats[name]:
-                        del cats[name]
+                    exec(f'_cats[name] {op} Cat(values, _cats, name)')
+                    if not _cats[name]:
+                        del _cats[name]
     elif isinstance(cats, dict):
         for cat in cats:
             if cat == '' or not cats[cat]:
