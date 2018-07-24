@@ -116,6 +116,9 @@ class Cat(list):
     
     def __sub__(self, cat):
         return Cat(value for value in self if value not in cat)
+    
+    def __le__(self, cat):
+        return all(value in cat for value in self)
 
 class Word(list):
     '''Represents a word as a list of graphemes.
@@ -452,7 +455,7 @@ class RulesSyllabifier:
         pos = 0
         while pos < len(word):
             for rule, _breaks in self.rules:
-                if rule[0] == '#' and pos != 0:
+                if rule[0] == '#' and pos > 1:
                     pos -= 1
                 match, rpos = word.match_pattern(rule, pos)[:2]
                 if match:
@@ -464,7 +467,7 @@ class RulesSyllabifier:
                     # Step past this match
                     pos = rpos
                     break
-                elif rule[0] == '#' and pos != 0:
+                elif rule[0] == '#' and pos > 1:
                     pos += 1
             else:  # No matches here
                 pos += 1
@@ -574,6 +577,11 @@ class PhonoRulesSyllabifier:
     
     def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
         # Generate initial rules - left margin + onset + nucleus
+        onsets = parse_patterns(onsets)
+        nuclei = parse_patterns(nuclei)
+        codas = parse_patterns(codas)
+        margins = parse_patterns(margins)
+        constraints = parse_patterns(constraints)
         self.rules = []
         rules = self.get_non_finals(onsets, nuclei, margins, True)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
@@ -583,6 +591,7 @@ class PhonoRulesSyllabifier:
         # Generate final rules - coda + right margin
         rules = self.get_finals(codas, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+        self.rules = [rule for rule in self.rules if self.check_valid(rule[0], constraints)]
     
     @staticmethod
     def get_non_finals(onsets, nuclei, codas, initial=False):
@@ -634,6 +643,26 @@ class PhonoRulesSyllabifier:
                 rules.append((pattern, breaks, rank))
         return rules
     
+    @staticmethod
+    def check_valid(rule, constraints):
+        for constraint in constraints:
+            for rpos in range(len(rule)-len(constraint)):
+                for cpos, ctoken in enumerate(constraint):
+                    rtoken = rule[rpos+cpos]
+                    if isinstance(rtoken, str) and isinstance(ctoken, str):
+                        if rtoken == ctoken:
+                            continue
+                    elif isinstance(rtoken, str) and isinstance(ctoken, Cat):
+                        if rtoken in ctoken:
+                            continue
+                    elif isinstance(rtoken, Cat) and isinstance(ctoken, Cat):
+                        if rtoken <= ctoken:
+                            continue
+                    break
+                else:
+                    return False
+        return True
+    
     __call__ = RulesSyllabifier.__call__
 
 # == Functions == #
@@ -684,10 +713,10 @@ def parse_patterns(patterns, cats=None):
                 pattern = pattern.split('//')[0]
             if not pattern:
                 continue
-            if isinstance(pattern, list):
-                _patterns.append(pattern)
-            else:
+            if isinstance(pattern, str):
                 _patterns.append(parse_pattern(pattern, cats))
+            else:
+                _patterns.append(pattern)
     elif isinstance(patterns, dict):
         _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
     else:
