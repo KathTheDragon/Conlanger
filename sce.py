@@ -383,7 +383,7 @@ def compile_rule(rule, cats=None):
         otherwise = tars.strip(',') + otherwise
         otherwise = compile_rule(otherwise, cats)
     # Check for invalid formatting where possible here
-    if '[' in reps and '[' not in tars:
+    if '[' in rule[0] and '[' not in tars:
         raise FormatError(f'a replacement contains a category while the targets do not')
     # Parse the fields
     tars = parse_tars(tars, cats) or [[]]
