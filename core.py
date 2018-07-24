@@ -47,6 +47,9 @@ class LangException(Exception):
 class FormatError(LangException):
     '''Exception raised for errors in formatting objects.'''
 
+class RuleError(LangException):
+    '''Exception raised for errors when running rules.'''
+
 # == Decorators == #
 # Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
 class lazyproperty(object):
@@ -404,6 +407,8 @@ class Word(list):
             ix = 0
             for i, token in enumerate(rep):
                 if isinstance(token, Cat):
+                    if not catixes:
+                        raise RuleError('replacement contains a category but target did not')
                     rep[i] = token[catixes[ix] % len(token)]
                     ix = (ix + 1) % len(catixes)
                 elif token == '"':

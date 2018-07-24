@@ -38,7 +38,7 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from .core import LangException, FormatError, Cat, Word, parse_pattern, parse_cats, split
+from .core import LangException, FormatError, RuleError, Cat, Word, parse_pattern, parse_cats, split
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -216,6 +216,9 @@ class RuleBlock(list):
                             except WordUnchanged:  # If the word didn't change, stop applying
                                 logger.info(f'`{word}` is not changed by `{rule}`')
                                 break
+                            except RuleError as e:  # Some other problem occurred
+                                logger.warning(f'{rule} execution suffered an error: {e}')
+                                break
                         else:
                             applied = False
                             logger.info(f'`{rule}` was randomly not run on `{word}`')
@@ -379,6 +382,9 @@ def compile_rule(rule, cats=None):
     if otherwise is not None:  # We need to add the tars to otherwise to make a valid rule, then compile
         otherwise = tars.strip(',') + otherwise
         otherwise = compile_rule(otherwise, cats)
+    # Check for invalid formatting where possible here
+    if '[' in reps and '[' not in tars:
+        raise FormatError(f'a replacement contains a category while the targets do not')
     # Parse the fields
     tars = parse_tars(tars, cats) or [[]]
     reps = parse_reps(rule[0].strip('>'), cats) or [[]]
