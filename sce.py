@@ -117,6 +117,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 matches += _matches
             else:
                 matches += [_matches[ix] for ix in indices if ix < len(_matches)]
+        matches.sort()
         logger.debug(f'> Final matches at positions {[match[0] for match in matches]}')
         # Filter only those matches that fit the environment - also record the corresponding replacement
         logger.debug('Check matches against environments and exceptions')
@@ -128,32 +129,38 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 del matches[i]
             else:
                 # Find the correct replacement
-                logger.debug('> Get replacement for this match')
+                logger.debug('>> Get replacement for this match')
                 if check == 1:
                     reps.append(self.reps[matches[i][3]])
+                    logger.debug(f'>>> Found {self.reps[matches[i][3]]}')
                 else:
                     otherwise = self.otherwise
                     for j in range(check-2):
                         otherwise = otherwise.otherwise
                     reps.append(otherwise.reps[matches[i][3]])
+                    logger.debug(f'>>> Found {otherwise.reps[matches[i][3]]}')
         reps.reverse()
         matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
         logger.debug('Filter out overlapping matches')
         if self.flags.rtl:
+            logger.debug('> Proceeding right-to-left')
             i = 1
             while i < len(matches):
-                if matches[i][0][0] + matches[i][0][1] > matches[i-1][0][0]:  # Overlap
+                if matches[i][0][1] > matches[i-1][0][0]:  # Overlap
+                    logger.debug(f'>> Match at {matches[i][0][0]} overlaps match at {matches[i-1][0][0]}')
                     del matches[i]
                 else:
                     i += 1
         else:
+            logger.debug('> Proceeding left-to-right')
             for i in reversed(range(len(matches)-1)):
-                if matches[i][0][0] < matches[i+1][0][0] + matches[i+1][0][1]:  # Overlap
+                if matches[i][0][0] < matches[i+1][0][1]:  # Overlap
+                    logger.debug(f'>> Match at {matches[i][0][0]} overlaps match at {matches[i+1][0][0]}')
                     del matches[i]
         logger.debug(f'Applying matches to `{word}`')
         for match, rep in matches:
-            logger.debug(f'> Changing `{word[match[0]:match[0]+match[1]]}` to `{rep}` at {matches[0]}')
+            logger.debug(f'> Changing `{list(word[match[0]:match[0]+match[1]])}` to `{rep}` at {match[0]}')
             word = word.apply_match(match, rep)
         if not reps:
             raise RuleFailed
