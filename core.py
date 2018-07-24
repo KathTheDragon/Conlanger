@@ -460,8 +460,8 @@ class RulesSyllabifier:
         pos = 0
         while pos < len(word):
             for rule, _breaks in self.rules:
-                if rule[0] == '#' and pos > 1:
-                    pos -= 1
+                if rule == ['_', '#'] and pos in breaks:
+                    continue
                 match, rpos = word.match_pattern(rule, pos)[:2]
                 if match:
                     # Compute and add breaks for this pattern
@@ -471,9 +471,9 @@ class RulesSyllabifier:
                             breaks.append(pos+ix)
                     # Step past this match
                     pos = rpos
+                    if rule[-1] == '#':
+                        pos -= 1
                     break
-                elif rule[0] == '#' and pos > 1:
-                    pos += 1
             else:  # No matches here
                 pos += 1
         return tuple(breaks)
