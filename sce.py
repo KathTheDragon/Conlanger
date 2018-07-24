@@ -260,7 +260,7 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
             _wordset.append(Word(word, graphs, syllabifier))
     return _wordset
 
-regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+([>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,])\s+')
+regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+([>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,^])\s+')
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
