@@ -5,9 +5,9 @@ Classes:
     Language -- represents a language
 
 Functions:
-    parse_patterns -- parse a string of generation patterns
-    load_lang      -- load the data from the named language file
-    save_lang      -- save the given language's data to file
+    unparse_pattern -- unparse a generation pattern back to a string
+    load_lang       -- load the data from the named language file
+    save_lang       -- save the given language's data to file
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
@@ -19,6 +19,8 @@ Maybe add different modes for each positional syllable type
 === Features ===
 Add generating every possible word/root
 Language.apply_ruleset will be replaced by calls to the diachronics module, once that exists
+Add constraints to phonotactics
+- Primarily for word gen, potentially useful for PhonoSyllabifier
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -27,7 +29,7 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 import os
 import json
-from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_syms, parse_cats, split
+from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_patterns, parse_cats, unparse_word
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/
@@ -48,9 +50,9 @@ class Language:
         gen_word      -- generate words
         apply_ruleset -- apply a sound change ruleset to a wordset
     '''
-    __slots__ = ('name', 'cats', '_configs', 'configs', '_syllabifier', 'rulessyllabifier', 'phonosyllabifier')
+    __slots__ = ('name', 'cats', 'configs', 'phonotactics', 'syllabifier')
     
-    def __init__(self, name='', cats=None, configs=None, syllabifier=None):
+    def __init__(self, name='', cats=None, configs=None, phonotactics=None, syllabifier=None):
         '''Constructor for Language().
         
         Arguments:
@@ -59,25 +61,58 @@ class Language:
             configs -- configuration data sets (dict)
         '''
         self.name = name
-        self.cats = {}
-        if cats is not None:
-            for cat in cats:
-                self.cats[cat] = Cat(cats[cat], self.cats)
+        self.cats = parse_cats(cats)
         if 'graphs' not in self.cats:  # Category 'graphs' must exist
             self.cats['graphs'] = Cat("'")
         self.configs = {}
         if configs is None:
             configs = {}
-        self._configs = configs  # We need to store the raw input so that we can retrieve it for saving to file
         for config in configs:
             _config = configs[config].copy()
-            _config['patterns'] = {k: parse_patterns(v, self.cats) for k,v in _config['patterns'].items()}
+            _config['patterns'] = parse_patterns(_config['patterns'], self.cats)
             _config['constraints'] = parse_patterns(_config['constraints'], self.cats)
             _config['sylrange'] = range(_config['sylrange'][0], _config['sylrange'][1]+1)
             self.configs[config] = Config(**_config)
-        self._syllabifier = syllabifier  # We need to store the raw input so that we can retrieve it for saving to file
-        self.rulessyllabifier = RulesSyllabifier(self.cats, syllabifier['rules'])
-        self.phonosyllabifier = PhonoSyllabifier(self.cats, syllabifier['onsets'], syllabifier['nuclei'], syllabifier['codas'])
+        self.phonotactics = parse_patterns(phonotactics, self.cats)
+        # Need some default phonotactics instead of empty lists
+        if not self.phonotactics['onsets']:
+            self.phonotactics['onsets'] = [['_']]
+        if not self.phonotactics['codas']:
+            self.phonotactics['codas'] = [['_']]
+        left = right = False
+        for i, margin in reversed(list(enumerate(self.phonotactics['margins']))):
+            if not (margin[0] == '#') ^ (margin[-1] == '#'):
+                del self.phonotactics['margins'][i]
+            elif not left and margin[0] == '#':
+                left = True
+            elif not right and margin[-1] == '#':
+                right = True
+        if not left:
+            self.phonotactics['margins'].append(['#', '_'])
+        if not right:
+            self.phonotactics['margins'].append(['_', '#'])
+        self.syllabifier = Syllabifier(self.cats, **self.phonotactics)
+    
+    @property
+    def data(self):
+        data = {}
+        if self.name != '':
+            data['name'] = self.name
+        if self.cats != {}:
+            data['cats'] = {name: list(cat) for name, cat in self.cats.items()}
+        if self._configs != {}:
+            data['configs'] = self._configs
+        if isinstance(self.syllabifier, RulesSyllabifier):
+            data['syllabifier'] = []
+            for rule in self.syllabifier.rules:
+            	rule, indices = rule
+            	rule = rule.copy()
+            	for i in reversed(indices):
+            		rule.insert(i, '$')
+            	data['syllabifier'].append(unparse_pattern(rule))
+        if self.phonotactics is not None:
+            data['phonotactics'] = {k: [unparse_pattern(pattern) for pattern in v] for k, v in self.phonotactics.items()}
+        return data
     
     def gen(self, config, num=1):
         '''Generates 'num' words using 'config'.
@@ -107,18 +142,6 @@ class Language:
         return sce.run(wordset, ruleset, self.cats, self.syllabifier, to_string)
 
 # == Functions == #
-def parse_patterns(patterns, cats=None):
-    '''Parses generation patterns.
-    
-    Arguments:
-        patterns -- set of patterns to parse (str or list)
-    
-    Returns a list
-    '''
-    if isinstance(patterns, str):
-        patterns = split(patterns, ',', minimal=True)
-    return [parse_syms(pattern, cats) for pattern in patterns]
-
 def load_lang(name):
     '''Loads language data from file.
     
@@ -137,7 +160,7 @@ def save_lang(lang):
     Arguments:
         lang -- the Language to save
     '''
-    data = {'name': lang.name, 'cats': {k: list(v) for k,v in lang.cats.items()}, 'configs': lang._configs, 'syllabifier': lang._syllabifier}
+    data = lang.data
     # Check for existing save data
     with open('langs/{}.dat'.format(name.lower()), 'r+', encoding='utf-8') as f:
         if f.read():
@@ -147,6 +170,28 @@ def save_lang(lang):
                 return
         json.dump(data)
 
+def unparse_pattern(pattern):
+    for i, token in reversed(list(enumerate(pattern))):
+        if isinstance(token, list) and not isinstance(token, Cat) and token[-1] == '?':
+            del pattern[i][-1]
+            pattern.insert(i+1, '?')
+        # Add collapsing repeated tokens
+    for i, token in reversed(list(enumerate(pattern))):
+        if isinstance(token, int):  # Integer repetition
+            pattern[i] = f'{{{pattern[i]}}}'
+        elif isinstance(token, tuple):  # Wildcard repetition and comparison
+            if isinstance(token[-1], int):
+                token = list(token)
+                token[-1] = str(token[-1])
+            pattern[i] = f'{{{"".join(token)}}}'
+        elif isinstance(token, Cat):
+            if token.name is not None:
+                pattern[i] = f'[{token.name}]'
+            else:
+                pattern[i] = f'[{token}]'
+        elif isinstance(token, list):
+            pattern[i] = f'({unparse_pattern(token)})'
+    return unparse_word(pattern)
+
 def getcwd():
     print(os.getcwd())
-

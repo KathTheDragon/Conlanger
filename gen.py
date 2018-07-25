@@ -15,7 +15,6 @@ Functions:
 Doesn't seem to be checking exceptions correctly (not urgent-urgent)
 
 === Implementation ===
-Look into utilising decomposition theorem in syllable generation - might need to add more to pyle.Language (is this redundant now?)
 
 === Features ===
 
@@ -165,3 +164,56 @@ def gen_word(config, graphs, syllabifier=None):
             raise ExceededMaxRunsError()
     return word + '#'
 
+def gen_word2(phonotactics, sylrange=(1,), sylmode=(), graphs=None, syllabifier=None):
+    '''Generate a single word as specified by the 'phonotactics'.
+    
+    Arguments:
+        phonotactics  -- the phonotactic data to be used
+        graphs      -- the set of graphemes used for this word
+        syllabifier -- the syllabifier used for syllabification
+    
+    Returns a Word
+    '''
+    word = Word([], graphs, syllabifier)
+    sylcount = peaked_dist(sylrange, *sylmode)
+    for i in range(sylcount):
+        # Generate a syllable
+        for _ in range(MAX_RUNS):
+            # Pick an onset
+            onset = select_periphery(phonotactics['onsets'], phonotactics['margins'], 'left', i)
+            # Pick a coda
+            coda = select_periphery(phonotactics['codas'], phonotactics['margins'], 'right', i-sylcount)
+            # Pick a nucleus
+            nuclei = phonotactics['nuclei']
+            if onset != ['#']:
+                nuclei = [nucleus for nucleus in nuclei if nucleus[0] != '#']
+            if coda != ['#']:
+                nuclei = [nucleus for nucleus in nuclei if nucleus[-1] != '#']
+            nucleus = choice(nuclei)
+            syl = populate(onset+nucleus+coda, ())
+            _word = word + syl
+            for env in phonotactics['constraints']:
+                if env and env in _word:
+                    break
+            else:
+                word = _word
+                break
+        else:
+            raise ExceededMaxRunsError()
+    return word
+
+def select_periphery(peripheries, margins, edge, i):
+    edge = 0 if edge == 'left' else -1
+    if i == edge:
+        margin = choice([margin for margin in margins if margin[edge] == '#'])
+        if margin == (['_', '#'] if edge else ['#', '_']):
+            margin = ['#']
+        peripheries = [(p+margin if edge else margin+p) if p[edge] != '#' else p for p in peripheries]
+    else:
+        peripheries = [p for p in peripheries if p[edge] != '#']
+    periphery = choice(peripheries)
+    if edge and periphery[0] == '_':
+        periphery = periphery[1:]
+    elif not edge and periphery[-1] == '_':
+        periphery = periphery[:-1]
+    return periphery
