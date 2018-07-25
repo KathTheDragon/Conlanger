@@ -326,22 +326,18 @@ class Word(list):
                         matched = True
                         catixes.append(token.index(self[pos]))
                 elif isinstance(token, list):  # Optional sequence
-                    mode = 'g'
-                    jump = len(token)
-                    ilength = 0
                     if token[-1] == '?':  # Non-greedy
-                        token = token[:-1]
-                        mode = 'ng'
-                    if (istep == 1) ^ (mode == 'g'):
-                        jump = 0
-                        ilength = len(token)
-                    if istep == -1:
-                        jump += istep
-                        ilength += istep
-                    stack.append((pos, ix+jump))
-                    pattern = pattern[:ix] + token + pattern[ix+1:]
-                    matched = True
-                    length = 0
+                        stack.append((pos, ix))
+                        pattern[ix] = token[:-1]
+                        matched = True
+                        length = 0
+                    else:
+                        stack.append((pos, ix+istep))
+                        _start, _end = (pos, None)[::istep]
+                        matched, rpos, _catixes = self.match_pattern(token, _start, _end, step)
+                        length = rpos-pos
+                        if matched:
+                            catixes.extend(_catixes)
                 elif isinstance(token, tuple) and token[0].startswith('*'):  # Presently only wildcard repetitions
                     stack.append((pos, ix-istep))
                     matched = True
