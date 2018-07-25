@@ -91,10 +91,7 @@ class Language:
             self.phonotactics['margins'].append(['#', '_'])
         if not right:
             self.phonotactics['margins'].append(['_', '#'])
-        if syllabifier is not None:
-            self.syllabifier = RulesSyllabifier(self.cats, parse_patterns(syllabifier, self.cats))
-        else:
-            self.syllabifier = PhonoSyllabifier(self.cats, **self.phonotactics)
+        self.syllabifier = Syllabifier(self.cats, **self.phonotactics)
     
     @property
     def data(self):
