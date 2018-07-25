@@ -19,8 +19,6 @@ Maybe add different modes for each positional syllable type
 === Features ===
 Add generating every possible word/root
 Language.apply_ruleset will be replaced by calls to the diachronics module, once that exists
-Add constraints to phonotactics
-- Primarily for word gen, potentially useful for PhonoSyllabifier
 
 === Style ===
 Consider where to raise/handle exceptions

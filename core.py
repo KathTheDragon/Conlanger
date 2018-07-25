@@ -30,7 +30,6 @@ Replace super-disgusting hacky wildcard repetition workaround in Word.match_patt
 
 === Features ===
 Something something punctuation
-Work out how to create syllabifier rules from phonotactics
 
 === Style ===
 Consider where to raise/handle exceptions
