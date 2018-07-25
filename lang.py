@@ -79,12 +79,17 @@ class Language:
             self.phonotactics['onsets'] = [['_']]
         if not self.phonotactics['codas']:
             self.phonotactics['codas'] = [['_']]
-        while '#' in self.phonotactics['margins']:
-            ix = self.phonotactics['margins'].index('#')
-            del self.phonotactics['margins'][ix]
-        if all(m[0] != '#' for m in self.phonotactics['margins']):
+        left = right = False
+        for i, margin in reversed(list(enumerate(self.phonotactics['margins']))):
+            if not (margin[0] == '#') ^ (margin[-1] == '#'):
+                del self.phonotactics['margins'][i]
+            elif not left and margin[0] == '#':
+                left = True
+            elif not right and margin[-1] == '#':
+                right = True
+        if not left:
             self.phonotactics['margins'].append(['#', '_'])
-        if all(m[-1] != '#' for m in self.phonotactics['margins']):
+        if not right:
             self.phonotactics['margins'].append(['_', '#'])
         if syllabifier is not None:
             self.syllabifier = RulesSyllabifier(self.cats, parse_patterns(syllabifier, self.cats))

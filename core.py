@@ -587,22 +587,20 @@ class PhonoRulesSyllabifier:
         margins = parse_patterns(margins)
         constraints = parse_patterns(constraints)
         self.rules = []
+        # Generate medial rules - coda + onset + nucleus
+        rules = self.get_non_finals(onsets, nuclei, codas)
+        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         # Generate final rules - coda + right margin
         rules = self.get_finals(codas, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
-            # Generate initial rules - left margin + onset + nucleus
-        rules = self.get_non_finals(onsets, nuclei, margins, True)
-        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
-        # Generate medial rules - coda + onset + nucleus
-        rules = self.get_non_finals(onsets, nuclei, codas)
+        # Generate initial rules - left margin + onset + nucleus
+        rules = self.get_non_finals(onsets, nuclei, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         self.rules = [rule for rule in self.rules if self.check_valid(rule[0], constraints)]
     
     @staticmethod
-    def get_non_finals(onsets, nuclei, codas, initial=False):
+    def get_non_finals(onsets, nuclei, codas):
         rules = []
-        if initial:
-            codas = [coda for coda in codas if coda[0] == '#']
         for crank, coda in enumerate(codas):
             if coda[-1] == '#':
                 continue
@@ -610,7 +608,7 @@ class PhonoRulesSyllabifier:
                 coda = coda[:-1]
             for orank, onset in enumerate(onsets):
                 if onset[0] == '#':
-                    if initial and coda == ['#']:
+                    if coda == ['#']:
                         onset = onset[1:]
                     else:
                         continue
@@ -618,7 +616,7 @@ class PhonoRulesSyllabifier:
                     onset = []
                 for nrank, nucleus in enumerate(nuclei):
                     if nucleus[0] == '#':
-                        if initial and onset == []:
+                        if coda == ['#'] and onset == []:
                             nucleus = nucleus[1:]
                         else:
                             continue
