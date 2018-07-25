@@ -172,7 +172,11 @@ class Word(list):
         return self._syllables
     
     def __repr__(self):
-        return f"Word('{self!s}')"
+        word = str(self)
+        if "'" in word:
+            return f'Word("{word}")'
+        else:
+            return f"Word('{word}')"
     
     def __str__(self):
         word = unparse_word(self, self.graphs)
