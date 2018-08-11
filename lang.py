@@ -19,8 +19,6 @@ Maybe add different modes for each positional syllable type
 === Features ===
 Add generating every possible word/root
 Language.apply_ruleset will be replaced by calls to the diachronics module, once that exists
-Add constraints to phonotactics
-- Primarily for word gen, potentially useful for PhonoSyllabifier
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -29,7 +27,7 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 import os
 import json
-from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_patterns, parse_cats, unparse_word
+from .core import Cat, Syllabifier, parse_patterns, parse_cats, unparse_word
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/

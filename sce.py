@@ -116,8 +116,8 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
-            else:
-                matches += [_matches[ix] for ix in indices if ix < len(_matches)]
+            elif _matches:
+                matches += [_matches[ix] for ix in indices if -len(_matches) <= ix < len(_matches)]
         matches.sort()
         logger.debug(f'> Final matches at positions {[match[0] for match in matches]}')
         # Filter only those matches that fit the environment - also record the corresponding replacement
@@ -271,7 +271,7 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
             _wordset.append(Word(word, graphs, syllabifier))
     return _wordset
 
-regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+([>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,^])\s+')
+regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+(>\^\??|[>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,^])\s+')
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
@@ -491,8 +491,11 @@ def parse_envs(envs, cats=None):
         env = env.strip('@,')
         if '&' in env:
             env = tuple(parse_envs(env.replace('&','|'), cats))
-        elif env.startswith('~'):  # ~X is equivalent to X_|_X
-            _envs.extend(parse_envs('{0}_|_{0}'.format(env.strip('~')), cats))
+        elif '~' in env:  # A~B is equivalent to AB|BA - ~B is equivalent to _~B
+            env = env.split('~')
+            env[0] = env[0] or '_'
+            env[-1] = env[-1] or '_'
+            _envs.extend(parse_envs('{}|{}'.format(''.join(env), ''.join(reversed(env))), cats))
             continue
         elif '_' in env:  # Local environment
             if env.count('_') > 1:
