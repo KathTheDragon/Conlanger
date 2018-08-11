@@ -27,7 +27,7 @@ Consider where to raise/handle exceptions
 from collections import namedtuple
 import os
 import json
-from .core import Cat, RulesSyllabifier, PhonoSyllabifier, parse_patterns, parse_cats, unparse_word
+from .core import Cat, Syllabifier, parse_patterns, parse_cats, unparse_word
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/

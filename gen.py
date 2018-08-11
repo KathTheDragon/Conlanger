@@ -143,11 +143,11 @@ def gen_word(config, graphs, syllabifier=None):
     sylcount = peaked_dist(sylrange, *sylmode)
     for i in range(sylcount):
         if sylcount == 1:  # Monosyllable
-            _patterns = patterns['mono']
+            _patterns = patterns['mono'] or patterns['init'] or patterns['term'] or patterns['medi']
         elif i == 0:  # Initial syllable
-            _patterns = patterns['init']
+            _patterns = patterns['init'] or patterns['medi']
         elif i == sylcount-1:  # Final syllable
-            _patterns = patterns['term']
+            _patterns = patterns['term'] or patterns['medi']
         else:  # Medial syllable
             _patterns = patterns['medi']
         for j in range(MAX_RUNS):

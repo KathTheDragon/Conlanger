@@ -284,7 +284,7 @@ class Word(list):
         start, end = slice_indices(self, start, end)
         end = end-1
         pos = start if step > 0 else end
-        ix = 0 if step > 0 else (len(pattern) - 1)
+        ix = 0 if step > 0 else (len(pattern)-1)
         istep = 1 if step > 0 else -1
         stack = []  # This stores the positions in the word and sequence that we branched at
         catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
@@ -320,7 +320,12 @@ class Word(list):
                         matched = (pos in self.syllables)
                         length = 0
                     elif token == '_':  # Null
-                        matched = step > 0 and pos != 0 or step < 0 and pos != len(self)-1
+                        if 0 < ix < len(pattern)-1:
+                            pass
+                        elif (step > 0)^(ix == 0):  # If _ is the last token
+                            matched = self[pos] != '#'
+                        else:  # If _ is the first token
+                            matched = (0 <= pos-step < len(self)) and self[pos-step] != '#'
                         length = 0
                     else:  # Grapheme
                         matched = self[pos] == token
