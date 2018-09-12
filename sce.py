@@ -106,12 +106,18 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             else:
                 tar, indices = [], ()
             logger.debug(f'> Matching `{tar}@{indices}`')
-            _matches = []
-            for pos in range(1, len(word)):  # Find all matches
-                match, rpos, catixes = word.match_pattern(tar, pos)
-                if match:  # tar matches at pos
-                    logger.debug(f'>> Target matched `{word[pos:rpos]}` at {pos}')
-                    _matches.append((pos, rpos, catixes, i))
+            if not tar:  # All pos's
+                logger.debug(f'>> Null target matched all positions in range 1..{len(word)}')
+                _matches = [(pos, pos, [], i) for pos in range(1, len(word))]
+            else:
+                _matches = []
+                for pos in range(1, len(word)):  # Find all matches
+                    match, rpos, catixes = word.match_pattern(tar, pos)
+                    if match:  # tar matches at pos
+                        logger.debug(f'>> Target matched `{word[pos:rpos]}` at {pos}')
+                        _matches.append((pos, rpos, catixes, i))
+                if not _matches:
+                    logger.debug('>> No matches for this target')
             # Filter only those matches selected by the given indices
             if not indices:
                 matches += _matches
@@ -119,6 +125,9 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                 matches += [_matches[ix] for ix in indices if -len(_matches) <= ix < len(_matches)]
         matches.sort()
         logger.debug(f'> Final matches at positions {[match[0] for match in matches]}')
+        if not matches:
+            logger.debug('No matches')
+            raise RuleFailed
         # Filter only those matches that fit the environment - also record the corresponding replacement
         logger.debug('Check matches against environments and exceptions')
         reps = []
@@ -140,6 +149,9 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                     reps.append(otherwise.reps[matches[i][3]])
                     logger.debug(f'>>> Found {otherwise.reps[matches[i][3]]}')
         reps.reverse()
+        if not reps:
+            logger.debug('No matches matched environment')
+            raise RuleFailed
         matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
         logger.debug('Filter out overlapping matches')
@@ -162,8 +174,6 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         for match, rep in matches:
             logger.debug(f'> Changing `{list(word[match[0]:match[0]+match[1]])}` to `{rep}` at {match[0]}')
             word = word.apply_match(match, rep)
-        if not reps:
-            raise RuleFailed
         if phones == tuple(word):
             raise WordUnchanged
         return word
@@ -183,6 +193,8 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         if self.otherwise is not None:  # Try checking otherwise
             check = self.otherwise.check_match(match, word)
             return check + (1 if check else 0)
+        else:
+            logger.debug('>> No "else" rule, check failed')
         return 0
 
 class RuleBlock(list):
