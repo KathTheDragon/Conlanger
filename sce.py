@@ -173,7 +173,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
                     del matches[i]
         logger.debug(f'Applying matches to `{word}`')
         for match, rep in matches:
-            logger.debug(f'> Changing `{list(word[match[0]:match[0]+match[1]])}` to `{rep}` at {match[0]}')
+            logger.debug(f'> Changing `{list(word[match[0]:match[1]])}` to `{rep}` at {match[0]}')
             word = word.apply_match(match, rep)
         if phones == tuple(word):
             raise WordUnchanged
