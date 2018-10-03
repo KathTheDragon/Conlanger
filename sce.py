@@ -363,10 +363,11 @@ def compile_rule(rule, cats=None):
         rule, flags = rule.rsplit(maxsplit=1)
     else:
         flags = ''
-    if rule.startswith('+'):  # Put epenthesis/deletion operators into standard form
-        rule = '>' + rule.strip('+')
-    elif rule.startswith('-'):
-        rule = rule.strip('-')
+    if '>' not in rule:
+        if rule.startswith('+'):  # Put epenthesis/deletion operators into standard form
+            rule = '>' + rule[1:]
+        elif rule.startswith('-'):
+            rule = rule[1:]
     # Identify the field operators and place a space before them - if there are any, tars comes before
     # the first operator, else tars is the whole rule
     if '>' in rule or '/' in rule or '!' in rule:
