@@ -416,7 +416,7 @@ class Word(list):
                     rep[i] = token[catixes[ix] % len(token)]
                     ix = (ix + 1) % len(catixes)
                 elif token == '"':
-                    rep[i] = rep[i-1]
+                    rep[i] = rep[i-1] if i != 0 else self[pos-1]
             # Deal with target references
             rep = resolve_target_reference(rep, tar)
             word = Word(list(self[:pos]) + rep + list(self[rpos:]), self.graphs, self.syllabifier)
