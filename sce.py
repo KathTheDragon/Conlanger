@@ -368,6 +368,8 @@ def compile_ruleset(ruleset, cats=None):
                     _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
     return RuleBlock(_ruleset)
 
+regexCat = re.compile(r'\[(?!\])')
+
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
     
@@ -430,7 +432,7 @@ def compile_rule(rule, cats=None):
         otherwise = tars.strip(',') + otherwise
         otherwise = compile_rule(otherwise, cats)
     # Check for invalid formatting where possible here
-    if '[' in rule[0] and '[' not in tars:
+    if regexCat.match(rule[0]) is not None and regexCat.match(tars) is None:
         raise FormatError(f'a replacement contains a category while the targets do not')
     # Parse the fields
     tars = parse_tars(tars, cats) or [[]]
