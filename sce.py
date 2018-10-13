@@ -271,16 +271,20 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
         graphs = Cat("'")
     _wordset = []
     for word in wordset:
-        # Remove comments
-        if isinstance(word, str):
-            word = word.split('//')[0].strip()
-        # Parse
-        if word == '':
-            continue
-        elif isinstance(word, Word):
-            _wordset.append(word)
+        if isinstance(word, Word):
+            line = [word]
+        elif isinstance(word, list):
+            line = word
+        elif word.startswith('//'):  # Is a comment
+            line = [word[2:]]
+        elif '//' in word:  # Contains a comment
+            word, comment = word.split('//', 1)
+            line = [Word(word, graphs, syllabifier), comment]
+        elif word:
+            line = [Word(word, graphs, syllabifier)]
         else:
-            _wordset.append(Word(word, graphs, syllabifier))
+            line = []
+        _wordset.append(line)
     return _wordset
 
 regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+(>\^\??|[>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,^])\s+')
@@ -379,6 +383,14 @@ def compile_rule(rule, cats=None):
     else:
         flags = ''
     if '>' not in rule:
+        standardise = True
+    elif '/' in rule and rule.find('/') < rule.find('>'):
+        standardise = True
+    elif '!' in rule and rule.find('!') < rule.find('>'):
+        standardise = True
+    else:
+        standardise = False
+    if standardise:
         if rule.startswith('+'):  # Put epenthesis/deletion operators into standard form
             rule = '>' + rule[1:]
         elif rule.startswith('-'):
@@ -590,7 +602,7 @@ def setup_logging(filename=__location__, logger_name='sce'):
         logging.config.fileConfig(filename)
     logger = logging.getLogger(logger_name)
 
-def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
+def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     '''Applies a set of sound change rules to a set of words.
     
     Arguments:
@@ -598,7 +610,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
         ruleset     -- the rules which are to be applied to the words (RuleBlock)
         cats        -- the initial categories to be used in ruleset compiling (dict)
         syllabifier -- the syllabifier function to use for syllabifying words (RulesSyllabifier)
-        to_string   -- whether to give a string or list output
+        output      -- what form to provide the output in - one of 'list', 'as-is', 'str' (str)
     
     Returns a str or list.
     '''
@@ -613,17 +625,18 @@ def run(wordset, ruleset, cats='', syllabifier=None, to_string=False):
             cats['graphs'] = Cat(rule.split('=')[1].strip(), cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
-    for i in range(len(wordset)):  # Extract bracketed parts of words
-        word = wordset[i]
-        start = word.find('{')
-        end = word.find('}')
-        if start == end == -1:  # No braces
-            wordset[i] = ([], word, [])
-        else:  # Braces
-            wordset[i] = (word[:start], word[start+1:end], word[end+1:])
-    wordset = [word[0]+ruleset.apply(word[1])+word[2] for word in wordset]
-    if to_string:
-        wordset = '\n'.join([str(word) for word in wordset])
+    for line in wordset:
+        if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
+            line[0] = ruleset.apply(line[0])
+    if output != 'as-is':
+        for i, line in enumerate(wordset):
+            if len(line) == 2 or len(line) == 1 and isinstance(line[0], str):
+                line[-1] = '//'+line[-1]
+            if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):
+                line[0] = str(line[0])
+            wordset[i] = ' '.join(line)
+    elif output == 'str':
+        wordset = '\n'.join(wordset)
     return wordset
 
 apply_ruleset = run
