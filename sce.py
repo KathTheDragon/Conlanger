@@ -368,6 +368,14 @@ def compile_rule(rule, cats=None):
     else:
         flags = ''
     if '>' not in rule:
+        standardise = True
+    elif '/' in rule and rule.find('/') < rule.find('>'):
+        standardise = True
+    elif '!' in rule and rule.find('!') < rule.find('>'):
+        standardise = True
+    else:
+        standardise = False
+    if standardise:
         if rule.startswith('+'):  # Put epenthesis/deletion operators into standard form
             rule = '>' + rule[1:]
         elif rule.startswith('-'):
