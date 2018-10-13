@@ -633,6 +633,8 @@ def parse_pattern(pattern, cats=None):
         token = token.replace(' ', '')
         if not token:
             del pattern[i]
+        elif token == '[]':  # Null
+            pattern[i] = ''
         elif token[0] == '(':  # Optional - parse to list
             token = parse_pattern(token[1:-1], cats)
             if all(isinstance(sub, list) and not isinstance(sub, Cat) for sub in token):
