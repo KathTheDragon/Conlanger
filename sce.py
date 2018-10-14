@@ -286,7 +286,11 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
         _wordset.append(line)
     return _wordset
 
-regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+(>\^\??|[>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,^])\s+')
+regexes = (re.compile(r'\s+(>\s+[/!]\s+)'),  # Used to delete whitespace before > / or > !
+    re.compile(r'\s+(>\^\??|[>/!|&@])\s+'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
+    re.compile(r'^([+-])\s+'),  # Used to delete whitespace after either of initial +-
+    re.compile(r'([:;,^])\s+')  # Used to delete whitespace after any of :;,^
+    )
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
