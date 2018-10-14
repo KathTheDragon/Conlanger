@@ -634,7 +634,7 @@ def parse_pattern(pattern, cats=None):
         if not token:
             del pattern[i]
         elif token == '[]':  # Null
-            pattern[i] = ''
+            pattern[i] = None
         elif token[0] == '(':  # Optional - parse to list
             token = parse_pattern(token[1:-1], cats)
             if all(isinstance(sub, list) and not isinstance(sub, Cat) for sub in token):
@@ -667,6 +667,9 @@ def parse_pattern(pattern, cats=None):
             if isinstance(pattern[i-1], list) and not isinstance(pattern[i-1], Cat):  # Optional
                 pattern[i-1].append('?')
                 del pattern[i]
+    for i, token in reversed(list(enumerate(pattern))):  # Third pass to clear None's
+        if token is None:
+            del pattern[i]
     return pattern
 
 def parse_cats(cats, initial_cats=None):
