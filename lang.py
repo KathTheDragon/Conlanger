@@ -127,7 +127,7 @@ class Language:
             return []
         return [gen.gen_word(self.configs[config], self.cats['graphs'], self.syllabifier) for i in range(num)]
     
-    def apply_ruleset(self, wordset, ruleset, to_string=False):
+    def apply_ruleset(self, wordset, ruleset, output='list'):
         '''Runs the sound change 'ruleset' on the 'wordset'.
         
         Arguments:
@@ -137,7 +137,7 @@ class Language:
         
         Returns a str or list
         '''
-        return sce.run(wordset, ruleset, self.cats, self.syllabifier, to_string)
+        return sce.run(wordset, ruleset, self.cats, self.syllabifier, output)
 
 # == Functions == #
 def load_lang(name):

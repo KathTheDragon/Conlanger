@@ -287,7 +287,11 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
         _wordset.append(line)
     return _wordset
 
-regexes = re.compile(r'\s+(>\s+[/!]\s+)'), re.compile(r'\s+(>\^\??|[>/!|&@])\s+'), re.compile(r'^([+-])\s+'), re.compile(r'([:;,^])\s+')
+regexes = (re.compile(r'\s+(>\s+[/!]\s+)'),  # Used to delete whitespace before > / or > !
+    re.compile(r'\s+(>\^\??|[>/!|&@])\s+'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
+    re.compile(r'^([+-])\s+'),  # Used to delete whitespace after either of initial +-
+    re.compile(r'([:;,^])\s+')  # Used to delete whitespace after any of :;,^
+    )
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
@@ -616,8 +620,10 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     
     Returns a str or list.
     '''
+    if not ruleset or if not wordset:  # One of these is blank so do nothing
+        return wordset
     cats = parse_cats(cats)
-    # If we didn't get passed a graphs category, get it from the ruleset
+    # If we didn't get passed a graphs category, check if we can get it from the ruleset
     if 'graphs' not in cats:
         if isinstance(ruleset, str):
             rule = ruleset.splitlines()[0]
@@ -637,7 +643,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
             if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):
                 line[0] = str(line[0])
             wordset[i] = ' '.join(line)
-    elif output == 'str':
+    if output == 'str':
         wordset = '\n'.join(wordset)
     return wordset
 
