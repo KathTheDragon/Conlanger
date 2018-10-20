@@ -290,7 +290,8 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
 regexes = (re.compile(r'\s+(>\s+[/!]\s+)'),  # Used to delete whitespace before > / or > !
     re.compile(r'\s+(>\^\??|[>/!|&@])\s+'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
     re.compile(r'^([+-])\s+'),  # Used to delete whitespace after either of initial +-
-    re.compile(r'([:;,^])\s+')  # Used to delete whitespace after any of :;,^
+    re.compile(r'([:;,^])\s+'),  # Used to delete whitespace after any of :;,^
+    re.compile(r'(?<!{)([>/!])')  # Used to insert whitespace before field markers
     )
 
 def compile_ruleset(ruleset, cats=None):
@@ -345,7 +346,7 @@ def compile_ruleset(ruleset, cats=None):
     # Second pass to create blocks
     for i, rule in reversed(list(enumerate(_ruleset))):
         if isinstance(rule, str):
-            rule = regexes[-1].sub(r'\1', rule)  # Clear extra whitespace
+            rule = regexes[-2].sub(r'\1', rule)  # Clear extra whitespace
             if ' ' in rule:
                 rule, flags = rule.split()
             else:
@@ -382,7 +383,7 @@ def compile_rule(rule, cats=None):
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
     _rule = rule
-    for regex in regexes:  # Various whitespace manipulations
+    for regex in regexes[:-1]:  # Various whitespace manipulations
         rule = regex.sub(r'\1', rule)
     if ' ' in rule:  # Flags are separated by whitespace from the rest of the rule
         rule, flags = rule.rsplit(maxsplit=1)
@@ -404,7 +405,7 @@ def compile_rule(rule, cats=None):
     # Identify the field operators and place a space before them - if there are any, tars comes before
     # the first operator, else tars is the whole rule
     if '>' in rule or '/' in rule or '!' in rule:
-        tars, rule = re.sub(r'(?<!{)([>/!])', r' \1', rule).split(' ', maxsplit=1)
+        tars, rule = re.sub(regexes[-1], r' \1', rule).split(' ', maxsplit=1)
     else:
         tars, rule = rule, ''
     # If there is a > field, it will begin the rule, and there must always be a field before otherwise,
@@ -538,7 +539,7 @@ def parse_envs(envs, cats=None):
                 raise FormatError(f'indexed global environments must have exactly one `@`: {_env}')
             env, indices = env.split('@')
             try:
-                indices = tuple(int(index)-(1 if int(index) > 0 else 0) for index in split(indices, ',', minimal=True))
+                indices = tuple(int(index)-(1 if int(index) < 0 else 0) for index in split(indices, ',', minimal=True))
             except ValueError:
                 raise FormatError(f'indices must be a comma-separated list of numbers: {_env}')
             env = [(parse_pattern(env, cats), indices)]
@@ -620,7 +621,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     
     Returns a str or list.
     '''
-    if not ruleset or if not wordset:  # One of these is blank so do nothing
+    if not ruleset or not wordset:  # One of these is blank so do nothing
         return wordset
     cats = parse_cats(cats)
     # If we didn't get passed a graphs category, check if we can get it from the ruleset
