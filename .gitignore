@@ -1,3 +1,6 @@
 __pycache__/
 langs/
 examples.py
+interface.py
+diach.py
+*.dat
