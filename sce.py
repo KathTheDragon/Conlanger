@@ -524,11 +524,14 @@ def parse_envs(envs, cats=None):
         if '&' in env:
             env = tuple(parse_envs(env.replace('&','|'), cats))
         elif '~' in env:  # A~B is equivalent to AB|BA - ~B is equivalent to _~B
-            env = env.split('~')
-            env[0] = env[0] or '_'
-            env[-1] = env[-1] or '_'
-            _envs.extend(parse_envs('{}|{}'.format(''.join(env), ''.join(reversed(env))), cats))
-            continue
+            if env == '~':
+                env = []
+            else:
+                env = env.split('~')
+                env[0] = env[0] or '_'
+                env[-1] = env[-1] or '_'
+                _envs.extend(parse_envs('{}|{}'.format(''.join(env), ''.join(reversed(env))), cats))
+                continue
         elif '_' in env:  # Local environment
             if env.count('_') > 1:
                 raise FormatError(f'local environments must have exactly one `_`: {_env}')
