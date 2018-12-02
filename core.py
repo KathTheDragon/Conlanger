@@ -645,8 +645,10 @@ def parse_pattern(pattern, cats=None):
             token = token[1:-1]
             if ',' in token:  # Nonce cat
                 pattern[i] = Cat(token, cats)
-            else:  # Named cat
+            elif token in cats:  # Named cat
                 pattern[i] = cats[token]
+            else:
+                raise FormatError(f'`{token}` is not a defined category')
         elif token[0] == '{':  # Numbers - a few types of this
             token = token[1:-1]
             if token[0] in '=<>':  # Comparison - parse to tuple
