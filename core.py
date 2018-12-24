@@ -425,7 +425,7 @@ class Word(list):
                 mode, envs = rep
                 matches = []
                 for wpos in range(1, len(self)):  # Find all matches
-                    if any(self.match_env(env, wpos) for env in envs):
+                    if any(self.match_env(env, wpos, wpos) for env in envs):
                         if mode == 'move' and wpos >= rpos:  # We'll need to adjust the matches down
                             wpos -= rpos-pos
                         matches.append(wpos)
