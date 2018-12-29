@@ -751,13 +751,13 @@ def unparse_word(wordin, graphs=None):
     separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
     for graph in wordin:
-        if not any(graph in poly for poly in polygraphs if graph != poly):  # If not a substring of a different graph
+        if not any(graph in poly and graph != poly for poly in polygraphs if graph != poly):  # If not a strict substring of any polygraph
             test = ''  # Can't ever be ambiguous
         elif not test:
             test = graph  # Nothing earlier to be ambiguous with
         else:
             test += graph
-            if any(poly in test for poly in polygraphs if graph != poly) or graph in test[:-1]:  # If test contains a polygraph
+            if any(poly in test and graph != poly or poly in test[:-1] for poly in polygraphs):  # If test contains a polygraph
                 word += separator  # Ambiguous, so add the separator
                 test = graph
             elif not any(test in poly for poly in polygraphs):
