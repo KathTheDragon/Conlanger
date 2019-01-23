@@ -734,7 +734,7 @@ def parse_word(word, graphs=None):
     separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
     graphemes = []
-    for char in '#'.join(f'.{word}.'.split()).strip('.')+separator:  # Convert all whitespace to a single #
+    for char in '#'.join(f'.{word}.'.split())[1:-1]+separator:  # Convert all whitespace to a single #
         test += char
         while len(test) > 1 and not any(graph.startswith(test) for graph in polygraphs):
             for i in reversed(range(1, len(test)+1)):
