@@ -341,7 +341,7 @@ class Word(list):
                         length = 0
                     else:
                         stack.append((pos, ix+istep))
-                        _start, _end = (pos, None)[::istep]
+                        _start, _end = (pos, None) if istep > 0 else (None, pos+1)
                         matched, rpos, _catixes = self.match_pattern(token, _start, _end, step)
                         length = rpos-pos
                         if matched:
@@ -357,8 +357,8 @@ class Word(list):
                 pos, ix = stack.pop()
             else:  # Total match failure
                 return False, 0, []
-        if step < 0:
-            pos -= step
+        # if step < 0:
+        #     pos -= step
         return True, pos, catixes
     
     def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
