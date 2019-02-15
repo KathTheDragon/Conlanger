@@ -15,6 +15,7 @@ Functions:
 Doesn't seem to be checking exceptions correctly (not urgent-urgent)
 
 === Implementation ===
+Potentially going to be overhauled in the near future
 
 === Features ===
 
