@@ -4,6 +4,12 @@ Conlanger is a package containing several tools designed primarily to aid conlan
 generation and diachronics. To use, simply place the package on your Python path, and `import conlanger` into an
 interface script.
 
+## Syntax
+
+`conlanger.syntax` is a stand-alone module allowing for the generation of syntax tree images, using either dependency or
+constituency trees, from a textual list-based representation of trees - labelled lists for constituency trees, and
+unlabelled lists as an alterantive for dependency trees. Requires Pillow as a dependency.
+
 ## Gen
 
 `conlanger.gen` is a module allowing the generation of words from syllables whose graphemes, where the syllable types

@@ -1,5 +1,6 @@
 __pycache__/
 langs/
+trees/
 examples.py
 diach.py
 interface.py
