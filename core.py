@@ -364,7 +364,9 @@ class Word(list):
                         if matched:
                             catixes.extend(_catixes)
                 elif isinstance(token, tuple) and token[0].startswith('*'):  # Presently only wildcard repetitions
-                    stack.append((pos, ix-istep))
+                    if not token[0].endswith('?'):  # Greedy
+                        ilength *= -1
+                    stack.append((pos, ix-ilength))
                     matched = True
                     length = 0
             if matched:
