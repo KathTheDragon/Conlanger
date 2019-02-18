@@ -22,6 +22,9 @@ Functions:
 ==================================== To-do ====================================
 === Bug-fixes ===
 catixes in Word.match_pattern should be redone to cope with non-linearity
+Fucky things happen with wildcards inside optionals
+- Due to not being able to jump in and out of optionals arbitrarily
+- Is this even a bug?
 
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
@@ -294,8 +297,8 @@ class Word(list):
             for i, token in enumerate(pattern):
                 if isinstance(token, tuple) and token[0].startswith('*'):
                     pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
+        matched = True
         while 0 <= ix < len(pattern):
-            matched = False
             length = step
             ilength = istep
             if start <= pos <= end:  # Still in the slice
@@ -314,6 +317,7 @@ class Word(list):
                                 # otherwise wpos is valid if not matching '#'
                                 if '#' not in self[pos:wpos:step]:
                                     stack.append((wpos, ix+istep))
+                        matched = False
                     elif token == '"':  # Ditto mark
                         matched = self[pos] == self[pos-1]
                     elif token == '$':  # Syllable break
@@ -321,7 +325,7 @@ class Word(list):
                         length = 0
                     elif token == '_':  # Null
                         if 0 < ix < len(pattern)-1:
-                            pass
+                            matched = False
                         elif (step > 0)^(ix == 0):  # If _ is the last token
                             matched = self[pos] != '#'
                         else:  # If _ is the first token
@@ -333,14 +337,27 @@ class Word(list):
                     if self[pos] in token:  # This may change if categories are allowed to contain sequences
                         matched = True
                         catixes.append(token.index(self[pos]))
+                    else:
+                        matched = False
                 elif isinstance(token, list):  # Optional sequence
                     if token[-1] == '?':  # Non-greedy
-                        stack.append((pos, ix))
-                        pattern[ix] = token[:-1]
-                        matched = True
-                        length = 0
+                        if matched:  # We stepped in normally
+                            stack.append((pos, ix))
+                            if pattern[ix+istep] == ('*',):  # We need to make sure to step past a wildcard repetition # Must change!
+                                ilength *= 2
+                            matched = True
+                            length = 0
+                        else:  # We jumped in via the stack
+                            _start, _end = (pos, None) if istep > 0 else (None, pos+1)
+                            matched, rpos, _catixes = self.match_pattern(token, _start, _end, step)
+                            length = rpos-pos
+                            if matched:
+                                catixes.extend(_catixes)
                     else:
-                        stack.append((pos, ix+istep))
+                        if pattern[ix+istep] == ('*',):  # We need to make sure to step past a wildcard repetition # Must change!
+                            stack.append((pos, ix+istep*2))
+                        else:
+                            stack.append((pos, ix+istep))
                         _start, _end = (pos, None) if istep > 0 else (None, pos+1)
                         matched, rpos, _catixes = self.match_pattern(token, _start, _end, step)
                         length = rpos-pos
