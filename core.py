@@ -678,7 +678,7 @@ def parse_pattern(pattern, cats=None):
         elif token[0] == '(':  # Optional - parse to list
             token = parse_pattern(token[1:-1], cats)
             # Maybe move ? handling up here?
-            if len(token) == 1 and token[0] in ('*?', '**?'):  # Non-greedy wildcard
+            if len(token) == 1 and token[0] in ('*?', '**?') or pattern[i+1] == ('*?',):  # Non-greedy wildcard
                 token.append('?')
             if all(isinstance(sub, list) and not isinstance(sub, Cat) for sub in token):
                 pattern[i:i+1] = token
@@ -710,7 +710,7 @@ def parse_pattern(pattern, cats=None):
             pattern[i-1:i+1] = [pattern[i-1]]*token
         elif token == '?':
             if isinstance(pattern[i-1], list) and not isinstance(pattern[i-1], Cat):  # Optional
-                if pattern[i-1][-1] != '?':
+                if pattern[i-1][-1] != '?' and not(len(pattern[i-1]) == 1 and pattern[i-1][0].startswith('*')) and pattern[i+1] != ('*',):
                     pattern[i-1].append('?')
                 del pattern[i]
     for i, token in reversed(list(enumerate(pattern))):  # Third pass to clear None's
