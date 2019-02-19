@@ -22,11 +22,15 @@ Functions:
 ==================================== To-do ====================================
 === Bug-fixes ===
 catixes in Word.match_pattern should be redone to cope with non-linearity
+Fucky things happen with wildcards inside optionals
+- Due to not being able to jump in and out of optionals arbitrarily
+- Is this even a bug?
 
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
 - How though
+The 'null' token should be revised
 
 === Features ===
 Something something punctuation
@@ -270,7 +274,7 @@ class Word(list):
                     return pos
         return -1
     
-    def match_pattern(self, pattern, start=None, end=None, step=1):
+    def match_pattern(self, pattern, start=None, end=None, step=1, stack=None):
         '''Match a pattern sequence to the word.
         
         Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
@@ -278,6 +282,7 @@ class Word(list):
         Arguments:
             pattern -- the sequence being matched
             start, end, step -- determine the slice of the word to match within
+            stack -- used to pass stack references into an optional segment
         
         Returns a tuple.
         '''
@@ -286,7 +291,13 @@ class Word(list):
         pos = start if step > 0 else end
         ix = 0 if step > 0 else (len(pattern)-1)
         istep = 1 if step > 0 else -1
-        stack = []  # This stores the positions in the word and sequence that we branched at
+        if stack is None:
+            stack = []  # This stores the positions in the word and sequence that we branched at
+            _returnstack = False
+        else:
+            if stack:
+                pos, ix = stack.pop()
+            _returnstack = True
         catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
         # Hacky thing for now to make wildcard repetitions actually work in rtl
         pattern = pattern.copy()
@@ -294,26 +305,21 @@ class Word(list):
             for i, token in enumerate(pattern):
                 if isinstance(token, tuple) and token[0].startswith('*'):
                     pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
+        matched = True
         while 0 <= ix < len(pattern):
-            matched = False
             length = step
             ilength = istep
             if start <= pos <= end:  # Still in the slice
                 token = pattern[ix]
                 if isinstance(token, str):
                     if token.startswith('*'):  # Wildcard
-                        wrange = range(pos+step, (end if step > 0 else start)+step, step)
-                        if '?' in token:  # Non-greedy
-                            wrange = wrange[::-1]
-                        if '**' in token:  # Extended
-                            for wpos in wrange:
-                                # wpos is always valid if wildcard is extended
-                                stack.append((wpos, ix+istep))
-                        else:
-                            for wpos in wrange:
-                                # otherwise wpos is valid if not matching '#'
-                                if '#' not in self[pos:wpos:step]:
-                                    stack.append((wpos, ix+istep))
+                        matched = token.startswith('**') or self[pos] != '#'
+                        if matched:
+                            if token.endswith('?'):  # Non-greedy
+                                stack.append((pos+step, ix))
+                            else:  # Greedy
+                                stack.append((pos+step, ix+istep))
+                                ilength = 0
                     elif token == '"':  # Ditto mark
                         matched = self[pos] == self[pos-1]
                     elif token == '$':  # Syllable break
@@ -321,7 +327,7 @@ class Word(list):
                         length = 0
                     elif token == '_':  # Null
                         if 0 < ix < len(pattern)-1:
-                            pass
+                            matched = False
                         elif (step > 0)^(ix == 0):  # If _ is the last token
                             matched = self[pos] != '#'
                         else:  # If _ is the first token
@@ -333,33 +339,67 @@ class Word(list):
                     if self[pos] in token:  # This may change if categories are allowed to contain sequences
                         matched = True
                         catixes.append(token.index(self[pos]))
+                    else:
+                        matched = False
                 elif isinstance(token, list):  # Optional sequence
-                    if token[-1] == '?':  # Non-greedy
+                    if not matched:  # Jumped here via the stack, check if we've got a nested stack reference
+                        if isinstance(stack[-1], list):
+                            _stack = stack.pop()
+                    else:
+                        _stack = []
+                    if token[-1] != '?':  # Greedy
+                        if pattern[ix+istep] == ('*',):  # We need to make sure to step past a wildcard repetition # Must change!
+                            stack.append((pos, ix+istep*2))
+                        else:
+                            stack.append((pos, ix+istep))
+                    elif matched:  # Non-greedy, we stepped in normally
                         stack.append((pos, ix))
-                        pattern[ix] = token[:-1]
+                        if pattern[ix+istep] == ('*',):  # We need to make sure to step past a wildcard repetition # Must change!
+                            ilength *= 2
                         matched = True
                         length = 0
-                    else:
-                        stack.append((pos, ix+istep))
-                        _start, _end = (pos, None) if istep > 0 else (None, pos+1)
-                        matched, rpos, _catixes = self.match_pattern(token, _start, _end, step)
+                    if not(token[-1] == '?' and matched):
+                        _start, _end = (pos, end+1) if istep > 0 else (start, pos+1)
+                        matched, rpos, _catixes, _stack = self.match_pattern(token, _start, _end, step, _stack)
+                        # Merge in the stack - if a reference has an index within token, nest it and push a reference to
+                        # the token, else correct the index and push it directly
+                        for _pos, _ix in _stack:
+                            if _ix >= len(token):
+                                _ix -= len(token)-1
+                                stack.append((_pos, _ix))
+                            else:
+                                if isinstance(stack[-2], list):
+                                    stack[-2].append((_pos, _ix))
+                                else:
+                                    stack.append([(_pos, _ix)])
+                                    stack.append((_pos, ix))
                         length = rpos-pos
                         if matched:
                             catixes.extend(_catixes)
                 elif isinstance(token, tuple) and token[0].startswith('*'):  # Presently only wildcard repetitions
-                    stack.append((pos, ix-istep))
+                    if not token[0].endswith('?'):  # Greedy
+                        ilength *= -1
+                    stack.append((pos, ix-ilength))
                     matched = True
                     length = 0
+            else:
+                matched = False
             if matched:
                 ix += ilength
                 pos += length
             elif stack:  # This segment failed to match, so we jump back to the next branch
                 pos, ix = stack.pop()
             else:  # Total match failure
-                return False, 0, []
+                if _returnstack:
+                    return False, 0, [], []  # Maybe?
+                else:
+                    return False, 0, []
         # if step < 0:
         #     pos -= step
-        return True, pos, catixes
+        if _returnstack:
+            return True, pos, catixes, stack
+        else:
+            return True, pos, catixes
     
     def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
@@ -637,6 +677,9 @@ def parse_pattern(pattern, cats=None):
             pattern[i] = None
         elif token[0] == '(':  # Optional - parse to list
             token = parse_pattern(token[1:-1], cats)
+            # Maybe move ? handling up here?
+            if len(token) == 1 and token[0] in ('*?', '**?'):  # Non-greedy wildcard
+                token.append('?')
             if all(isinstance(sub, list) and not isinstance(sub, Cat) for sub in token):
                 pattern[i:i+1] = token
             else:
@@ -667,7 +710,8 @@ def parse_pattern(pattern, cats=None):
             pattern[i-1:i+1] = [pattern[i-1]]*token
         elif token == '?':
             if isinstance(pattern[i-1], list) and not isinstance(pattern[i-1], Cat):  # Optional
-                pattern[i-1].append('?')
+                if pattern[i-1][-1] != '?':
+                    pattern[i-1].append('?')
                 del pattern[i]
     for i, token in reversed(list(enumerate(pattern))):  # Third pass to clear None's
         if token is None:
