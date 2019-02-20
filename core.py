@@ -287,8 +287,7 @@ class Word(list):
         Returns a tuple.
         '''
         start, end = slice_indices(self, start, end)
-        end = end-1
-        pos = start if step > 0 else end
+        pos = start if step > 0 else end-1
         ix = 0 if step > 0 else (len(pattern)-1)
         istep = 1 if step > 0 else -1
         if stack is None:
@@ -309,7 +308,7 @@ class Word(list):
         while 0 <= ix < len(pattern):
             length = step
             ilength = istep
-            if start <= pos <= end:  # Still in the slice
+            if start <= pos < end:  # Still in the slice
                 token = pattern[ix]
                 if isinstance(token, str):
                     if token.startswith('*'):  # Wildcard
@@ -359,7 +358,7 @@ class Word(list):
                         matched = True
                         length = 0
                     if not(token[-1] == '?' and matched):
-                        _start, _end = (pos, end+1) if istep > 0 else (start, pos+1)
+                        _start, _end = (pos, end) if istep > 0 else (start, pos+1)
                         matched, rpos, _catixes, _stack = self.match_pattern(token, _start, _end, step, _stack)
                         # Merge in the stack - if a reference has an index within token, nest it and push a reference to
                         # the token, else correct the index and push it directly
