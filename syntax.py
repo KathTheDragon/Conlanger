@@ -169,7 +169,7 @@ class Tree():
             if self.isleaf:
                 return floor(self.pixelwidth/2)
             else:
-                return floor((self[0].labelmiddle+self[-1].labelmiddle+self.pixelwidth-self[-1].pixelwidth)/2)
+                return floor((self.branches[0].labelmiddle+self.branches[-1].labelmiddle+self.pixelwidth-self.branches[-1].pixelwidth)/2)
     
     ## Methods ##
     
