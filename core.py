@@ -31,6 +31,7 @@ Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
 - How though
 The 'null' token should be revised
+Perhaps @lazyproperty can be revised to not replace itself, and instead store the calculated value within itself
 
 === Features ===
 Something something punctuation
