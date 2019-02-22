@@ -56,7 +56,7 @@ class RuleError(LangException):
 
 # == Decorators == #
 # Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
-class lazyproperty(object):
+class memoisedproperty(object):
     def __init__(self, fget):
         self.fget = fget
         self.func_name = fget.__name__
