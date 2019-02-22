@@ -19,8 +19,8 @@ from .core import split, LangException
 POINT_SIZE = 16
 FONT = ImageFont.truetype('calibri.ttf', POINT_SIZE)
 GAP_WIDTH = POINT_SIZE  # minimum horizontal spacing between trees
-GAP_HEIGHT = floor(POINT_SIZE*1.5)  # minimum vertical spacing between layers
-LAYER_HEIGHT = GAP_HEIGHT + POINT_SIZE  # Needs calibration
+GAP_HEIGHT = POINT_SIZE  # minimum vertical spacing between layers
+LAYER_HEIGHT = GAP_HEIGHT + POINT_SIZE
 PADDING = POINT_SIZE  # Padding around the edge of the image
 
 # == Exceptions == #
