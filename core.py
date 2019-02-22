@@ -31,7 +31,6 @@ Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
 Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
 - How though
 The 'null' token should be revised
-Perhaps @lazyproperty can be revised to not replace itself, and instead store the calculated value within itself
 
 === Features ===
 Something something punctuation
@@ -56,17 +55,17 @@ class RuleError(LangException):
 
 # == Decorators == #
 # Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
-class lazyproperty(object):
-    def __init__(self, fget):
-        self.fget = fget
-        self.func_name = fget.__name__
+class memoisedproperty():
+    def __init__(self, func):
+        self.func = func
+        self.value = None
     
     def __get__(self, obj, cls):
-        if obj is None:
-            return None
-        value = self.fget(obj)
-        setattr(obj, self.func_name, value)
-        return value
+        if self.value is None:
+            if obj is None:
+                return None
+            self.value = self.func(obj)
+        return self.value
 
 # == Classes == #
 class Cat(list):
