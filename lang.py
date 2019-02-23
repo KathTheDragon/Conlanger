@@ -74,9 +74,9 @@ class Language:
         self.phonotactics = parse_patterns(phonotactics, self.cats)
         # Need some default phonotactics instead of empty lists
         if not self.phonotactics['onsets']:
-            self.phonotactics['onsets'] = [['_']]
+            self.phonotactics['onsets'] = parse_patterns('_')
         if not self.phonotactics['codas']:
-            self.phonotactics['codas'] = [['_']]
+            self.phonotactics['codas'] = parse_patterns('_')
         left = right = False
         for i, margin in reversed(list(enumerate(self.phonotactics['margins']))):
             if not (margin[0] == '#') ^ (margin[-1] == '#'):
@@ -86,9 +86,9 @@ class Language:
             elif not right and margin[-1] == '#':
                 right = True
         if not left:
-            self.phonotactics['margins'].append(['#', '_'])
+            self.phonotactics['margins'].extend(parse_patterns('#_'))
         if not right:
-            self.phonotactics['margins'].append(['_', '#'])
+            self.phonotactics['margins'].extend(parse_patterns('_#'))
         self.syllabifier = Syllabifier(self.cats, **self.phonotactics)
     
     @property
@@ -169,26 +169,17 @@ def save_lang(lang):
         json.dump(data)
 
 def unparse_pattern(pattern):
-    for i, token in reversed(list(enumerate(pattern))):
-        if isinstance(token, list) and not isinstance(token, Cat) and token[-1] == '?':
-            del pattern[i][-1]
-            pattern.insert(i+1, '?')
-        # Add collapsing repeated tokens
+    # Add collapsing repeated tokens
     for i, token in reversed(list(enumerate(pattern))):
         if isinstance(token, int):  # Integer repetition
             pattern[i] = f'{{{pattern[i]}}}'
-        elif isinstance(token, tuple):  # Wildcard repetition and comparison
-            if isinstance(token[-1], int):
-                token = list(token)
-                token[-1] = str(token[-1])
-            pattern[i] = f'{{{"".join(token)}}}'
-        elif isinstance(token, Cat):
-            if token.name is not None:
-                pattern[i] = f'[{token.name}]'
-            else:
-                pattern[i] = f'[{token}]'
-        elif isinstance(token, list):
-            pattern[i] = f'({unparse_pattern(token)})'
+        # This probably should be moved to _pattern
+        elif token.type == 'optional':
+            pattern[i] = f'({unparse_pattern(token.pattern)})'
+            if not token.greedy:
+                pattern[i] = pattern[i] + '?'
+        else:
+            pattern[i] = str(token)
     return unparse_word(pattern)
 
 def getcwd():

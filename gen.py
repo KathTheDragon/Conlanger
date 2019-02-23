@@ -103,29 +103,29 @@ def populate(pattern, mode, all=False):
     '''
     if not all:  # One random syllable
         result = []
-        for seg in pattern:
-            if isinstance(seg, Cat):
-                result.append(peaked_dist(seg, *mode))
-            elif seg == '"':
+        for token in pattern:
+            if token.type == 'category':
+                result.append(peaked_dist(token.cat, *mode))
+            elif token == '"':
                 result.append(result[-1])
             else:
-                result.append(seg)
+                result.append(str(token))
         return result
     else:  # Every possible syllable
         results = [[]]
-        for seg in pattern:
-            if isinstance(seg, Cat):
+        for token in pattern:
+            if token.type == 'category':
                 temp = []
                 for result in results:
-                    for sym in seg:
-                        temp.append(result+[sym])
+                    for graph in token.cat:
+                        temp.append(result+[graph])
                 results = temp
-            elif seg == '"':
+            elif token == '"':
                 for i in range(len(results)):
                     results[i].append(results[i][-1])
             else:
                 for i in range(len(results)):
-                    results[i].append(seg)
+                    results[i].append(str(token))
         return results
 
 def gen_word(config, graphs, syllabifier=None):
