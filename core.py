@@ -5,32 +5,23 @@ Exceptions:
     FormatError   -- Error for incorrect formatting
 
 Classes:
-    Cat              -- represents a category of phonemes
-    Word             -- represents a run of text
-    RulesSyllabifier -- syllabifies a word based on a set of rules
-    PhonoSyllabifier -- syllabifies a word based on phonotactics
+    Cat         -- represents a category of phonemes
+    Word        -- represents a run of text
+    Syllabifier -- syllabifies a word based on phonotactics
 
 Functions:
     resolve_target_reference -- substitutes a target into a pattern list
-    slice_indices  -- returns absolute indices for slice indices on an iterable
-    parse_patterns -- parses a set of patterns using pattern notation
-    parse_pattern  -- parses a string using pattern notation
-    parse_cats     -- parses a set of categories
-    parse_word     -- parses a string of graphemes
-    split          -- splits a string
+    slice_indices -- returns absolute indices for slice indices on an iterable
+    parse_cats    -- parses a set of categories
+    parse_word    -- parses a string of graphemes
+    split         -- splits a string
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
-catixes in Word.match_pattern should be redone to cope with non-linearity
-Fucky things happen with wildcards inside optionals
-- Due to not being able to jump in and out of optionals arbitrarily
-- Is this even a bug?
 
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
-Replace super-disgusting hacky wildcard repetition workaround in Word.match_pattern with something better
-- How though
-The 'null' token should be revised
+Perhaps @lazyproperty can be revised to not replace itself, and instead store the calculated value within itself
 
 === Features ===
 Something something punctuation
@@ -42,6 +33,7 @@ Go over docstrings
 
 from collections import namedtuple
 from string import whitespace
+from ._pattern import match_pattern, parse_pattern, parse_patterns
 
 # == Exceptions == #
 class LangException(Exception):
@@ -55,7 +47,7 @@ class RuleError(LangException):
 
 # == Decorators == #
 # Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
-class lazyproperty(object):
+class memoisedproperty(object):
     def __init__(self, fget):
         self.fget = fget
         self.func_name = fget.__name__
@@ -257,10 +249,10 @@ class Word(list):
         '''
         start, end = slice_indices(self, start, end)
         if isinstance(sub, Word):
-            sub = sub.strip()  # We want to strip out '#'s at the edge so that this works like finding substrings
-        if sub and isinstance(sub[-1], tuple):  # Counting
+            sub = parse_pattern(sub)
+        if sub and sub[-1].type == 'comparison':  # Counting
             matches = 0
-            op, count = sub[-1]
+            op, count = sub[-1].operation, sub[-1].value
             for pos in range(start, end):
                 match = self.match_pattern(sub[:-1], pos, end)[0]
                 if match:
@@ -274,7 +266,7 @@ class Word(list):
                     return pos
         return -1
     
-    def match_pattern(self, pattern, start=None, end=None, step=1, stack=None):
+    def match_pattern(self, pattern, start=None, end=None, step=1):
         '''Match a pattern sequence to the word.
         
         Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
@@ -287,119 +279,7 @@ class Word(list):
         Returns a tuple.
         '''
         start, end = slice_indices(self, start, end)
-        end = end-1
-        pos = start if step > 0 else end
-        ix = 0 if step > 0 else (len(pattern)-1)
-        istep = 1 if step > 0 else -1
-        if stack is None:
-            stack = []  # This stores the positions in the word and sequence that we branched at
-            _returnstack = False
-        else:
-            if stack:
-                pos, ix = stack.pop()
-            _returnstack = True
-        catixes = []  # This records the index of each category match. This needs to be redone to cope with non-linearity
-        # Hacky thing for now to make wildcard repetitions actually work in rtl
-        pattern = pattern.copy()
-        if step < 0:
-            for i, token in enumerate(pattern):
-                if isinstance(token, tuple) and token[0].startswith('*'):
-                    pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
-        matched = True
-        while 0 <= ix < len(pattern):
-            length = step
-            ilength = istep
-            if start <= pos <= end:  # Still in the slice
-                token = pattern[ix]
-                if isinstance(token, str):
-                    if token.startswith('*'):  # Wildcard
-                        matched = token.startswith('**') or self[pos] != '#'
-                        if matched:
-                            if token.endswith('?'):  # Non-greedy
-                                stack.append((pos+step, ix))
-                            else:  # Greedy
-                                stack.append((pos+step, ix+istep))
-                                ilength = 0
-                    elif token == '"':  # Ditto mark
-                        matched = self[pos] == self[pos-1]
-                    elif token == '$':  # Syllable break
-                        matched = (pos in self.syllables)
-                        length = 0
-                    elif token == '_':  # Null
-                        if 0 < ix < len(pattern)-1:
-                            matched = False
-                        elif (step > 0)^(ix == 0):  # If _ is the last token
-                            matched = self[pos] != '#'
-                        else:  # If _ is the first token
-                            matched = (0 <= pos-step < len(self)) and self[pos-step] != '#'
-                        length = 0
-                    else:  # Grapheme
-                        matched = self[pos] == token
-                elif isinstance(token, Cat):  # Category
-                    if self[pos] in token:  # This may change if categories are allowed to contain sequences
-                        matched = True
-                        catixes.append(token.index(self[pos]))
-                    else:
-                        matched = False
-                elif isinstance(token, list):  # Optional sequence
-                    if not matched:  # Jumped here via the stack, check if we've got a nested stack reference
-                        if isinstance(stack[-1], list):
-                            _stack = stack.pop()
-                    else:
-                        _stack = []
-                    if token[-1] != '?':  # Greedy
-                        if pattern[ix+istep] == ('*',):  # We need to make sure to step past a wildcard repetition # Must change!
-                            stack.append((pos, ix+istep*2))
-                        else:
-                            stack.append((pos, ix+istep))
-                    elif matched:  # Non-greedy, we stepped in normally
-                        stack.append((pos, ix))
-                        if pattern[ix+istep] == ('*',):  # We need to make sure to step past a wildcard repetition # Must change!
-                            ilength *= 2
-                        matched = True
-                        length = 0
-                    if not(token[-1] == '?' and matched):
-                        _start, _end = (pos, end+1) if istep > 0 else (start, pos+1)
-                        matched, rpos, _catixes, _stack = self.match_pattern(token, _start, _end, step, _stack)
-                        # Merge in the stack - if a reference has an index within token, nest it and push a reference to
-                        # the token, else correct the index and push it directly
-                        for _pos, _ix in _stack:
-                            if _ix >= len(token):
-                                _ix -= len(token)-1
-                                stack.append((_pos, _ix))
-                            else:
-                                if isinstance(stack[-2], list):
-                                    stack[-2].append((_pos, _ix))
-                                else:
-                                    stack.append([(_pos, _ix)])
-                                    stack.append((_pos, ix))
-                        length = rpos-pos
-                        if matched:
-                            catixes.extend(_catixes)
-                elif isinstance(token, tuple) and token[0].startswith('*'):  # Presently only wildcard repetitions
-                    if not token[0].endswith('?'):  # Greedy
-                        ilength *= -1
-                    stack.append((pos, ix-ilength))
-                    matched = True
-                    length = 0
-            else:
-                matched = False
-            if matched:
-                ix += ilength
-                pos += length
-            elif stack:  # This segment failed to match, so we jump back to the next branch
-                pos, ix = stack.pop()
-            else:  # Total match failure
-                if _returnstack:
-                    return False, 0, [], []  # Maybe?
-                else:
-                    return False, 0, []
-        # if step < 0:
-        #     pos -= step
-        if _returnstack:
-            return True, pos, catixes, stack
-        else:
-            return True, pos, catixes
+        return match_pattern(self, pattern, start, end, step)
     
     def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
@@ -446,20 +326,23 @@ class Word(list):
         pos, rpos, catixes = match[:3]
         tar = self[pos:rpos]
         if isinstance(rep, list):  # Replacement
-            rep = rep.copy()
-            # Deal with categories and ditto marks
+            rep = resolve_target_reference(rep, tar)
+            # Resolve tokens
             ix = 0
             for i, token in enumerate(rep):
-                if isinstance(token, Cat):
+                if token.type == 'grapheme':
+                    rep[i] = token.grapheme
+                elif token.type == 'category':
                     if not catixes:
                         raise RuleError('replacement contains a category but target did not')
-                    rep[i] = token[catixes[ix] % len(token)]
+                    cat = token.cat
+                    rep[i] = cat[catixes[ix] % len(cat)]
                     ix = (ix + 1) % len(catixes)
-                elif token == '"':
+                elif token.type == 'ditto':
                     rep[i] = rep[i-1] if i != 0 else self[pos-1]
-            # Deal with target references
-            rep = resolve_target_reference(rep, tar)
-            word = Word(list(self[:pos]) + rep + list(self[rpos:]), self.graphs, self.syllabifier)
+                else:
+                    rep[i] = ''
+            word = Word(list(self[:pos]) + _rep + list(self[rpos:]), self.graphs, self.syllabifier)
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
@@ -593,14 +476,12 @@ class Syllabifier:
         return tuple(breaks)
 
 # == Functions == #
-def resolve_target_reference(seq, tar):
-    seq = seq.copy()
-    for i, token in reversed(list(enumerate(seq))):
-        if token == '%':  # Target copying
-            seq[i:i+1] = tar
-        elif token == '<':  # Target reversal/metathesis
-            seq[i:i+1] = reversed(tar)
-    return seq
+def resolve_target_reference(pattern, tar):
+    pattern = pattern.copy()
+    for i, token in reversed(list(enumerate(pattern))):
+        if token.type == 'targetref':
+            pattern[i:i+1] = token.resolve_target(tar)
+    return pattern
 
 def slice_indices(iter, start=None, end=None):
     '''Calculate absolute indices from slice indices on an iterable.
@@ -621,102 +502,6 @@ def slice_indices(iter, start=None, end=None):
     elif end < 0:
         end += len(iter)
     return start, end
-
-def parse_patterns(patterns, cats=None):
-    '''Parses generation patterns.
-    
-    Arguments:
-        patterns -- set of patterns to parse (str, list, or dict)
-    
-    Returns a list
-    '''
-    if isinstance(patterns, str):
-        patterns = patterns.splitlines()
-    if isinstance(patterns, list):
-        _patterns = []
-        for pattern in patterns:
-            #Remove comments
-            if isinstance(pattern, str):
-                pattern = pattern.split('//')[0]
-            if not pattern:
-                continue
-            if isinstance(pattern, str):
-                _patterns.append(parse_pattern(pattern, cats))
-            else:
-                _patterns.append(pattern)
-    elif isinstance(patterns, dict):
-        _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
-    else:
-        _patterns = None
-    return _patterns
-
-def parse_pattern(pattern, cats=None):
-    '''Parse a string using pattern notation.
-    
-    Arguments:
-        pattern -- the input string using pattern notation (str)
-        cats    -- a list of cats to use for interpreting categories (list)
-    
-    Returns a list
-    '''
-    if cats is None:
-        cats = {}
-    else:
-        cats = cats.copy()
-    if 'graphs' not in cats:
-        cats['graphs'] = Cat("'")
-    cats['graphs'] += ['**', '*?', '**?']  # Easiest way to have multi-letter symbols parse correctly
-    for char in '([{}])':
-        pattern = pattern.replace(char, f' {char} ')
-    pattern = split(pattern, ' ', nesting=(0, '([{', '}])'), minimal=True)
-    for i, token in reversed(list(enumerate(pattern))):
-        token = token.replace(' ', '')
-        if not token:
-            del pattern[i]
-        elif token == '[]':  # Null
-            pattern[i] = None
-        elif token[0] == '(':  # Optional - parse to list
-            token = parse_pattern(token[1:-1], cats)
-            # Maybe move ? handling up here?
-            if len(token) == 1 and token[0] in ('*?', '**?') or pattern[i+1] == ('*?',):  # Non-greedy wildcard
-                token.append('?')
-            if all(isinstance(sub, list) and not isinstance(sub, Cat) for sub in token):
-                pattern[i:i+1] = token
-            else:
-                pattern[i] = token
-        elif token[0] == '[':  # Category - parse to Cat
-            token = token[1:-1]
-            if ',' in token:  # Nonce cat
-                pattern[i] = Cat(token, cats)
-            elif token in cats:  # Named cat
-                pattern[i] = cats[token]
-            else:
-                raise FormatError(f'`{token}` is not a defined category')
-        elif token[0] == '{':  # Numbers - a few types of this
-            token = token[1:-1]
-            if token[0] in '=<>':  # Comparison - parse to tuple
-                op = token[0]
-                if token[1] == '=' or op == '=':
-                    op += '='
-                pattern[i] = (op, int(token.strip('=<>')))
-            elif token[0] == '*':  # Wildcard repetition - parse to tuple
-                pattern[i] = (token,)
-            else:  # Repetitions - parse to int
-                pattern[i] = int(token)
-        else:  # Text - parse as word
-            pattern[i:i+1] = parse_word(token, cats['graphs'])
-    for i, token in reversed(list(enumerate(pattern))):  # Second pass to evaluate repetitions and ?
-        if isinstance(token, int):
-            pattern[i-1:i+1] = [pattern[i-1]]*token
-        elif token == '?':
-            if isinstance(pattern[i-1], list) and not isinstance(pattern[i-1], Cat):  # Optional
-                if pattern[i-1][-1] != '?' and not(len(pattern[i-1]) == 1 and pattern[i-1][0].startswith('*')) and pattern[i+1] != ('*',):
-                    pattern[i-1].append('?')
-                del pattern[i]
-    for i, token in reversed(list(enumerate(pattern))):  # Third pass to clear None's
-        if token is None:
-            del pattern[i]
-    return pattern
 
 def parse_cats(cats, initial_cats=None):
     '''Parses a set of categories.
