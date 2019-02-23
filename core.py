@@ -5,10 +5,9 @@ Exceptions:
     FormatError   -- Error for incorrect formatting
 
 Classes:
-    Cat              -- represents a category of phonemes
-    Word             -- represents a run of text
-    RulesSyllabifier -- syllabifies a word based on a set of rules
-    PhonoSyllabifier -- syllabifies a word based on phonotactics
+    Cat         -- represents a category of phonemes
+    Word        -- represents a run of text
+    Syllabifier -- syllabifies a word based on phonotactics
 
 Functions:
     resolve_target_reference -- substitutes a target into a pattern list
