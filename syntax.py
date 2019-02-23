@@ -64,10 +64,7 @@ class Tree():
     
     def __str__(self):
         children = ' '.join(str(child) for child in self)
-        if children:
-            return f'[{self.label} {children}]'
-        else:
-            return f'[{self.label}]'
+        return f'[{self.label} {children}]' if children else f'[{self.label}]'
     
     def __repr__(self):
         return f'Tree("{self}")'
@@ -87,10 +84,7 @@ class Tree():
     
     @property
     def layer(self):
-        if self.isroot:
-            return 0
-        else:
-            return self.parent.layer + 1
+        return 0 if self.isroot else return (self.parent.layer + 1)
     
     ## Tree Size ##
     @property
@@ -107,7 +101,7 @@ class Tree():
     
     @property
     def labelwidth(self):
-        return textwidth(self.label)
+        return FONT.getsize(self.label)[0]
     
     @property
     def labelleft(self):
@@ -205,9 +199,6 @@ class ConstituencyTree(Tree):
 
 class ConstituencyLeaf(Leaf):
     pass
-
-def textwidth(text):
-    return FONT.getsize(text)[0]
 
 def drawtree(tree, leaves, mode):
     if mode == 'dep':
