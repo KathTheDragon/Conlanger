@@ -241,13 +241,13 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                 else:
                     _stack = []
                 if token.greedy:  # Greedy
-                    if ix < len(pattern)-istep and pattern[ix+istep].type = 'wildcardrep':  # We need to make sure to step past a wildcard repetition
+                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
                         stack.append((pos, ix+istep*2))
                     else:
                         stack.append((pos, ix+istep))
                 elif matched:  # Non-greedy, we stepped in normally
                     stack.append((pos, ix))
-                    if ix < len(pattern)-istep and pattern[ix+istep].type = 'wildcardrep':  # We need to make sure to step past a wildcard repetition
+                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
                         ilength = istep*2
                     else:
                         ilength = istep
@@ -315,7 +315,7 @@ def parse_pattern(pattern, cats=None):
         if not token or token == '[]':  # Blank or null
             del pattern[i]
         elif token[0] == '(':  # Optional
-            if i < len(pattern)-1 and isinstance(pattern[i+1], WildcardRep):
+            if i < len(pattern)-1 and pattern[i+1].type == 'wildcardrep':
                 token = token.rstrip('?') if pattern[i+1].greedy else (token+'?')
             pattern[i] = Optional(token, cats)
             # To-do - reimplement flattening optionals
