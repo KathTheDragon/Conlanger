@@ -114,7 +114,7 @@ class Category(Token):
     
     def match(self, word, pos, ix, step, istep):
         if word[pos] in self.cat:  # This might change
-            return True, step, istep, [], [self.cat.index[word[pos]]]
+            return True, step, istep, [], [self.cat.index(word[pos])]
         return False, 0, 0, [], []
 
 class Wildcard(Token):
