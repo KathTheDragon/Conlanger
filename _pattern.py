@@ -245,6 +245,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                         stack.append((pos, ix+istep*2))
                     else:
                         stack.append((pos, ix+istep))
+                    ilength = step
                 elif matched:  # Non-greedy, we stepped in normally
                     stack.append((pos, ix))
                     if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
