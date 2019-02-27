@@ -236,7 +236,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                 catixes.extend(_catixes)
             else:  # Optionals require special handling
                 if not matched:  # Jumped here via the stack, check if we've got a nested stack reference
-                    if isinstance(stack[-1], list):
+                    if stack and isinstance(stack[-1], list):
                         _stack = stack.pop()
                 else:
                     _stack = []
