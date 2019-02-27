@@ -264,7 +264,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                             _ix -= len(token.pattern)-1
                             stack.append((_pos, _ix))
                         else:
-                            if isinstance(stack[-2], list):
+                            if len(stack) >= 2 and isinstance(stack[-2], list):
                                 stack[-2].append((_pos, _ix))
                             else:
                                 stack.append([(_pos, _ix)])
