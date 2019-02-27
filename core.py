@@ -342,7 +342,7 @@ class Word(list):
                     rep[i] = rep[i-1] if i != 0 else self[pos-1]
                 else:
                     rep[i] = ''
-            word = Word(list(self[:pos]) + _rep + list(self[rpos:]), self.graphs, self.syllabifier)
+            word = Word(list(self[:pos]) + rep + list(self[rpos:]), self.graphs, self.syllabifier)
         else:  # Movement
             if isinstance(rep[1], list):  # Environment
                 mode, envs = rep
