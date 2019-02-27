@@ -255,7 +255,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                     length = 0
                 if token.greedy or not matched:
                     _start, _end = (pos, end) if istep > 0 else (start, pos+1)
-                    matched, rpos, _catixes, _stack = self.match_pattern(token.pattern, _start, _end, step, _stack)
+                    matched, rpos, _catixes, _stack = match_pattern(token.pattern, _start, _end, step, _stack)
                     # Merge in the stack - if a reference has an index within token, nest it and push a reference to
                     # the token, else correct the index and push it directly
                     for _pos, _ix in _stack:
