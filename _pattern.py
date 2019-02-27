@@ -260,8 +260,8 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                     # Merge in the stack - if a reference has an index within token, nest it and push a reference to
                     # the token, else correct the index and push it directly
                     for _pos, _ix in _stack:
-                        if _ix >= len(token):
-                            _ix -= len(token)-1
+                        if _ix >= len(token.pattern):
+                            _ix -= len(token.pattern)-1
                             stack.append((_pos, _ix))
                         else:
                             if isinstance(stack[-2], list):
