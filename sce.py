@@ -40,7 +40,7 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from .core import LangException, FormatError, RuleError, Cat, Word, parse_pattern, parse_cats, split
+from .core import LangException, FormatError, RuleError, Cat, Word, parse_pattern, parse_cats, split, escape
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -313,9 +313,11 @@ def compile_ruleset(ruleset, cats=None):
         # Remove comments
         if isinstance(rule, str):
             rule = rule.split('//')[0].strip()
+        # Escape characters
+        rule = escape(rule)
+        # Compile
         if rule == '':
             continue
-        # Compile
         elif isinstance(rule, Rule):
             _ruleset.append(rule)
         elif '>' in rule or rule[0] in '+-':  # Rule is a sound change

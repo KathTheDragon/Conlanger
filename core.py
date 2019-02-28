@@ -33,7 +33,7 @@ Go over docstrings
 
 from collections import namedtuple
 from string import whitespace
-from ._pattern import match_pattern, parse_pattern, parse_patterns
+from ._pattern import match_pattern, parse_pattern, parse_patterns, escape
 
 # == Exceptions == #
 class LangException(Exception):

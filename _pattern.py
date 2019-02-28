@@ -11,6 +11,7 @@ Classes:
     Optional    -- Token matching an optional sequence of tokens
 
 Functions:
+    escape         -- processes escaped characters in a string
     match_pattern  -- matches a list of tokens to a specified slice of a word
     parse_pattern  -- parses a string utilising pattern notation into a list of tokens
     parse_patterns -- parses a collection of strings using pattern notation
@@ -288,6 +289,14 @@ def match_pattern(word, pattern, start, end, step, stack=None):
         return True, pos, catixes, stack
     else:
         return True, pos, catixes
+    
+def escape(string):
+    while True:
+        ix = string.find('\\')
+        if ix == -1:
+            break
+        string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
+    return string
 
 def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
@@ -328,6 +337,8 @@ def parse_pattern(pattern, cats=None):
                 pattern[i] = Comparison(token)
             elif token in ('*', '*?'):  # Wildcard repetition
                 pattern[i] = WildcardRep(token)
+            elif token.startswith('u'):  # Escaped character
+                pattern[i] = Grapheme(chr(token[1:]))
             else:  # Repetitions - parse to int
                 pattern[i] = int(token)
         elif token in ('*', '**', '*?', '**?'):  # Wildcard
