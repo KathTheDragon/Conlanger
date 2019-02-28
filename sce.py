@@ -20,7 +20,6 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
-Rewrite flag parsing to be more strict about syntax
 
 === Features ===
 Is it possible to implement a>b>c as notation for a chain shift?
@@ -550,49 +549,39 @@ def parse_flags(flags):
     
     Returns a namedtuple.
     '''
-    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
+    binaryflags = ('ignore', 'rtl')
+    ternaryflags = ('ditto', 'stop')
+    numericflags = {'repeat': MAX_RUNS, 'persist': MAX_RUNS, 'chance': 100}  # Max values
+    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'persist': 1, 'chance': 100}  # Default values
     for flag in split(flags, ';', minimal=True):
         _flag = flag  # Record the original for error messages
         if ':' in flag:
             if flag.count(':') > 1:
                 raise FormatError(f'flags must have at most one argument: {_flag}')
             flag, arg = flag.split(':')
-            if flag in _flags:
-                try:
-                    _flags[flag] = int(arg)
-                except ValueError:
-                    raise FormatError(f'flags must have numeric arguments: {_flag}')
+            if flag not in numericflags:
+                raise FormatError(f'invalid numeric flag: {_flag}')
+            try:
+                arg = int(arg)
+            except ValueError:
+                raise FormatError(f'flags must have integer arguments: {_flag}')
+            if 1 <= arg <= numericflags[flag]:
+                _flags[flag] = arg
             else:
-                raise FormatError(f'invalid flag: {_flag}')
+                raise FormatError(f'flag argument out of range: {_flag}')
         elif flag.startswith('!'):
             flag = flag.strip('!')
-            if flag in _flags:
-                _flags[flag] = _flags[flag]-1
+            if flag in ternaryflags:
+                _flags[flag] = -1
             else:
-                raise FormatError(f'invalid flag: {_flag}')
+                raise FormatError(f'invalid ternary flag: {_flag}')
         else:
-            if flag in _flags:
-                _flags[flag] = 1-_flags[flag]
+            if flag in numericflags:
+                _flags[flag] = numericflags[flag]  # Set to maximum value
+            elif flag in _flags:
+                _flags[flag] = 1  # All other flags, set to 1
             else:
                 raise FormatError(f'invalid flag: {_flag}')
-    _flags['for_'] = _flags['for']
-    del _flags['for']
-    # Validate values
-    # Binary flags
-    for flag in ('ignore', 'rtl'):
-        if not 0 <= _flags[flag] <= 1:
-            _flags[flag] = 0
-    # Ternary flags
-    for flag in ('ditto', 'stop'):
-        if not -1 <= _flags[flag] <= 1:
-            _flags[flag] = 0
-    # Unbounded flags
-    for flag in ('repeat', 'for_'):
-        if not 1 <= _flags[flag] <= MAX_RUNS:
-            _flags[flag] = MAX_RUNS
-    # Value flags
-    if not 0 <= _flags['chance'] <= 100:
-        _flags['chance'] = 100
     return Flags(**_flags)
 
 def setup_logging(filename=__location__, logger_name='sce'):
