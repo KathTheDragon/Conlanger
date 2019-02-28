@@ -11,6 +11,7 @@ Classes:
     Optional    -- Token matching an optional sequence of tokens
 
 Functions:
+    escape         -- processes escaped characters in a string
     match_pattern  -- matches a list of tokens to a specified slice of a word
     parse_pattern  -- parses a string utilising pattern notation into a list of tokens
     parse_patterns -- parses a collection of strings using pattern notation
@@ -114,7 +115,7 @@ class Category(Token):
     
     def match(self, word, pos, ix, step, istep):
         if word[pos] in self.cat:  # This might change
-            return True, step, istep, [], [self.cat.index[word[pos]]]
+            return True, step, istep, [], [self.cat.index(word[pos])]
         return False, 0, 0, [], []
 
 class Wildcard(Token):
@@ -236,18 +237,19 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                 catixes.extend(_catixes)
             else:  # Optionals require special handling
                 if not matched:  # Jumped here via the stack, check if we've got a nested stack reference
-                    if isinstance(stack[-1], list):
+                    if stack and isinstance(stack[-1], list):
                         _stack = stack.pop()
                 else:
                     _stack = []
                 if token.greedy:  # Greedy
-                    if ix < len(pattern)-istep and pattern[ix+istep].type = 'wildcardrep':  # We need to make sure to step past a wildcard repetition
+                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
                         stack.append((pos, ix+istep*2))
                     else:
                         stack.append((pos, ix+istep))
+                    ilength = step
                 elif matched:  # Non-greedy, we stepped in normally
                     stack.append((pos, ix))
-                    if ix < len(pattern)-istep and pattern[ix+istep].type = 'wildcardrep':  # We need to make sure to step past a wildcard repetition
+                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
                         ilength = istep*2
                     else:
                         ilength = istep
@@ -255,15 +257,15 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                     length = 0
                 if token.greedy or not matched:
                     _start, _end = (pos, end) if istep > 0 else (start, pos+1)
-                    matched, rpos, _catixes, _stack = self.match_pattern(token.pattern, _start, _end, step, _stack)
+                    matched, rpos, _catixes, _stack = match_pattern(word, token.pattern, _start, _end, step, _stack)
                     # Merge in the stack - if a reference has an index within token, nest it and push a reference to
                     # the token, else correct the index and push it directly
                     for _pos, _ix in _stack:
-                        if _ix >= len(token):
-                            _ix -= len(token)-1
+                        if _ix >= len(token.pattern):
+                            _ix -= len(token.pattern)-1
                             stack.append((_pos, _ix))
                         else:
-                            if isinstance(stack[-2], list):
+                            if len(stack) >= 2 and isinstance(stack[-2], list):
                                 stack[-2].append((_pos, _ix))
                             else:
                                 stack.append([(_pos, _ix)])
@@ -287,6 +289,14 @@ def match_pattern(word, pattern, start, end, step, stack=None):
         return True, pos, catixes, stack
     else:
         return True, pos, catixes
+    
+def escape(string):
+    while True:
+        ix = string.find('\\')
+        if ix == -1:
+            break
+        string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
+    return string
 
 def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
@@ -315,7 +325,7 @@ def parse_pattern(pattern, cats=None):
         if not token or token == '[]':  # Blank or null
             del pattern[i]
         elif token[0] == '(':  # Optional
-            if i < len(pattern)-1 and isinstance(pattern[i+1], WildcardRep):
+            if i < len(pattern)-1 and pattern[i+1].type == 'wildcardrep':
                 token = token.rstrip('?') if pattern[i+1].greedy else (token+'?')
             pattern[i] = Optional(token, cats)
             # To-do - reimplement flattening optionals
@@ -327,6 +337,8 @@ def parse_pattern(pattern, cats=None):
                 pattern[i] = Comparison(token)
             elif token in ('*', '*?'):  # Wildcard repetition
                 pattern[i] = WildcardRep(token)
+            elif token.startswith('u'):  # Escaped character
+                pattern[i] = Grapheme(chr(token[1:]))
             else:  # Repetitions - parse to int
                 pattern[i] = int(token)
         elif token in ('*', '**', '*?', '**?'):  # Wildcard
