@@ -556,9 +556,9 @@ def parse_flags(flags):
     for flag in split(flags, ';', minimal=True):
         _flag = flag  # Record the original for error messages
         if ':' in flag:
-            if flag.count(':') > 1:
+            flag, arg = flag.split(':', 1)
+            if ':' in arg:
                 raise FormatError(f'flags must have at most one argument: {_flag}')
-            flag, arg = flag.split(':')
             if flag not in numericflags:
                 raise FormatError(f'invalid numeric flag: {_flag}')
             try:
