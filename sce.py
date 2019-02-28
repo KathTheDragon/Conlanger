@@ -309,11 +309,11 @@ def compile_ruleset(ruleset, cats=None):
         cats = {}
     _ruleset = []
     for rule in ruleset:
+        # Escape characters
+        rule = escape(rule)
         # Remove comments
         if isinstance(rule, str):
             rule = rule.split('//')[0].strip()
-        # Escape characters
-        rule = escape(rule)
         # Compile
         if rule == '':
             continue
