@@ -20,12 +20,13 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
+Rewrite flag parsing to be more strict about syntax
 
 === Features ===
 Is it possible to implement a>b>c as notation for a chain shift?
 Think about expanding the options for grapheme handling
 - diacritics?
-Named rules
+Named rules via !def metarule
 Allow ~ in tar and rep
 
 === Style ===
@@ -230,16 +231,15 @@ class RuleBlock(list):
                                 wordin = word
                                 word = rule.apply(word)
                                 logger.info(f'`{wordin}` -> `{rule}` -> `{word}`')
+                                continue
                             except RuleFailed:  # The rule didn't apply, make note of this
                                 applied = False
-                                logger.info(f'`{rule}` did not apply to `{word}`')
-                                break
+                                logger.info(f'`{rule}` does not apply to `{word}`')
                             except WordUnchanged:  # If the word didn't change, stop applying
-                                logger.info(f'`{word}` is not changed by `{rule}`')
-                                break
+                                logger.info(f'`{rule}` does not change `{word}`')
                             except RuleError as e:  # Some other problem occurred
                                 logger.warning(f'{rule} execution suffered an error: {e}')
-                                break
+                            break
                         else:
                             applied = False
                             logger.info(f'`{rule}` was randomly not run on `{word}`')
@@ -628,6 +628,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     ruleset = compile_ruleset(ruleset, cats)
     for line in wordset:
         if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
+            logger.info(f'This word: {line[0]}')
             line[0] = ruleset.apply(line[0])
     if output != 'as-is':
         for i, line in enumerate(wordset):
