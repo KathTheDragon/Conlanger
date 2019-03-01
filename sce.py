@@ -219,7 +219,7 @@ class RuleBlock(list):
         for _rule in self:
             # We want _rule to run before the stored rules, but to be placed at the end instead
             rules.append(_rule)
-            values.append(_rule.flags.for_)
+            values.append(_rule.flags.persist)
             for rule in [_rule]+rules[:-1]:
                 flags = rule.flags
                 if not flags.ditto or (flags.ditto != 1) ^ applied:
@@ -251,7 +251,7 @@ class RuleBlock(list):
                     del values[i]
         return word
 
-Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, for_, chance')
+Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, persist, chance')
 
 # == Functions == #
 def parse_wordset(wordset, cats=None, syllabifier=None):
