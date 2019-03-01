@@ -25,7 +25,7 @@ Functions:
 Is it possible to implement a>b>c as notation for a chain shift?
 Think about expanding the options for grapheme handling
 - diacritics?
-Named rules
+Named rules via !def metarule
 Allow ~ in tar and rep
 
 === Style ===
@@ -220,7 +220,7 @@ class RuleBlock(list):
         for _rule in self:
             # We want _rule to run before the stored rules, but to be placed at the end instead
             rules.append(_rule)
-            values.append(_rule.flags.for_)
+            values.append(_rule.flags.persist)
             for rule in [_rule]+rules[:-1]:
                 flags = rule.flags
                 if not flags.ditto or (flags.ditto != 1) ^ applied:
@@ -231,16 +231,15 @@ class RuleBlock(list):
                                 wordin = word
                                 word = rule.apply(word)
                                 logger.info(f'`{wordin}` -> `{rule}` -> `{word}`')
+                                continue
                             except RuleFailed:  # The rule didn't apply, make note of this
                                 applied = False
-                                logger.info(f'`{rule}` did not apply to `{word}`')
-                                break
+                                logger.info(f'`{rule}` does not apply to `{word}`')
                             except WordUnchanged:  # If the word didn't change, stop applying
-                                logger.info(f'`{word}` is not changed by `{rule}`')
-                                break
+                                logger.info(f'`{rule}` does not change `{word}`')
                             except RuleError as e:  # Some other problem occurred
                                 logger.warning(f'{rule} execution suffered an error: {e}')
-                                break
+                            break
                         else:
                             applied = False
                             logger.info(f'`{rule}` was randomly not run on `{word}`')
@@ -253,7 +252,7 @@ class RuleBlock(list):
                     del values[i]
         return word
 
-Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, for_, chance')
+Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, persist, chance')
 
 # == Functions == #
 def parse_wordset(wordset, cats=None, syllabifier=None):
@@ -319,11 +318,11 @@ def compile_ruleset(ruleset, cats=None):
                 phomo -= 1
                 if phomo == 0:
                     phomo = False
+        # Escape characters
+        rule = escape(rule)
         # Remove comments
         if isinstance(rule, str):
             rule = rule.split('//')[0].strip()
-        # Escape characters
-        rule = escape(rule)
         # Compile
         if rule == '':
             continue
@@ -347,35 +346,65 @@ def compile_ruleset(ruleset, cats=None):
                     phomo = True
                 continue
             _ruleset.append(rule.strip('!'))
-    # Second pass to create blocks
-    for i, rule in reversed(list(enumerate(_ruleset))):
-        if isinstance(rule, str):
-            rule = regexes[-2].sub(r'\1', rule)  # Clear extra whitespace
-            if ' ' in rule:
-                rule, flags = rule.split()
-            else:
-                flags = ''
+    # Evaluate meta-rules
+    ruleset = make_block(_ruleset)[0]
+    return RuleBlock(ruleset)
+
+def make_block(ruleset, n=None, defs=None):
+    if defs is None:
+        defs = {}
+    else:
+        defs = defs.copy()
+    block = []
+    while len(block) != n and ruleset:
+        rule, ruleset = ruleset[0], ruleset[1:]
+        if isinstance(rule, Rule):
+            block.append(rule)
+        else:
+            _rule = rule  # Save for error messages
             try:
-                flags = parse_flags(flags)
-            except FormatError as e:
-                logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: {e}')
-                continue
-            if ':' in rule:
-                if rule.count(':') > 1:
-                    logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: meta-rules must have at most one argument: {rule}')
-                rule, arg = rule.split(':')
-                try:
-                    arg = int(arg)
-                except ValueError:
-                    logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: meta-rules must have numeric arguments: {rule}:{arg}')
-            else:
-                arg = 0
-            if rule == 'block':
-                if arg:
-                    _ruleset[i:i+arg+1] = [RuleBlock(_ruleset[i+1:i+arg+1], flags)]
+                if ' ' in rule:
+                    rule, flags = rule.split()
                 else:
-                    _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
-    return RuleBlock(_ruleset)
+                    flags = ''
+                flags = parse_flags(flags)
+                rule, arg = validate_arg(rule)
+                if rule == 'block':
+                    if arg is not None:
+                        try:
+                            arg = int(arg)
+                        except ValueError:
+                            raise FormatError('`block` must have an integer argument')
+                    _block, ruleset, defs = make_block(ruleset, arg, defs)
+                    block.append(RuleBlock(_block, flags))
+                elif rule == 'def':
+                    if arg is None:
+                        raise FormatError('`def` must have an argument')
+                    if not ruleset:
+                        raise FormatError('`def` requires a following rule')
+                    [rule], ruleset, defs = make_block(ruleset, 1, defs)
+                    defs[arg] = rule
+                elif rule == 'rule':
+                    if arg is None:
+                        raise FormatError('`rule` must have an argument')
+                    if arg not in defs:
+                        raise FormatError(f'rule `{arg}` has not been defined')
+                    block.append(defs[arg])
+                else:
+                    raise FormatError('unknown meta-rule')
+            except FormatError as e:
+                logger.warning(f'Meta-rule `!{_rule}` failed to compile due to bad formatting: {e}')
+    return block, ruleset, defs
+
+def validate_arg(rule):
+    if ':' not in rule:
+        return rule, None
+    rule, arg = rule.split(':', 1)
+    if arg == '':
+        raise FormatError(f'arguments must not be blank')
+    if ':' in arg:
+        raise FormatError(f'more than one argument may not be given')
+    return rule, arg
 
 regexCat = re.compile(r'\[(?!\])')
 
@@ -565,49 +594,39 @@ def parse_flags(flags):
     
     Returns a namedtuple.
     '''
-    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'for': 1, 'chance': 100}  # Default values
+    binaryflags = ('ignore', 'rtl')
+    ternaryflags = ('ditto', 'stop')
+    numericflags = {'repeat': MAX_RUNS, 'persist': MAX_RUNS, 'chance': 100}  # Max values
+    _flags = {'ignore': 0, 'ditto': 0, 'stop': 0, 'rtl': 0, 'repeat': 1, 'persist': 1, 'chance': 100}  # Default values
     for flag in split(flags, ';', minimal=True):
         _flag = flag  # Record the original for error messages
         if ':' in flag:
-            if flag.count(':') > 1:
+            flag, arg = flag.split(':', 1)
+            if ':' in arg:
                 raise FormatError(f'flags must have at most one argument: {_flag}')
-            flag, arg = flag.split(':')
-            if flag in _flags:
-                try:
-                    _flags[flag] = int(arg)
-                except ValueError:
-                    raise FormatError(f'flags must have numeric arguments: {_flag}')
+            if flag not in numericflags:
+                raise FormatError(f'invalid numeric flag: {_flag}')
+            try:
+                arg = int(arg)
+            except ValueError:
+                raise FormatError(f'flags must have integer arguments: {_flag}')
+            if 1 <= arg <= numericflags[flag]:
+                _flags[flag] = arg
             else:
-                raise FormatError(f'invalid flag: {_flag}')
+                raise FormatError(f'flag argument out of range: {_flag}')
         elif flag.startswith('!'):
             flag = flag.strip('!')
-            if flag in _flags:
-                _flags[flag] = _flags[flag]-1
+            if flag in ternaryflags:
+                _flags[flag] = -1
             else:
-                raise FormatError(f'invalid flag: {_flag}')
+                raise FormatError(f'invalid ternary flag: {_flag}')
         else:
-            if flag in _flags:
-                _flags[flag] = 1-_flags[flag]
+            if flag in numericflags:
+                _flags[flag] = numericflags[flag]  # Set to maximum value
+            elif flag in _flags:
+                _flags[flag] = 1  # All other flags, set to 1
             else:
                 raise FormatError(f'invalid flag: {_flag}')
-    _flags['for_'] = _flags['for']
-    del _flags['for']
-    # Validate values
-    # Binary flags
-    for flag in ('ignore', 'rtl'):
-        if not 0 <= _flags[flag] <= 1:
-            _flags[flag] = 0
-    # Ternary flags
-    for flag in ('ditto', 'stop'):
-        if not -1 <= _flags[flag] <= 1:
-            _flags[flag] = 0
-    # Unbounded flags
-    for flag in ('repeat', 'for_'):
-        if not 1 <= _flags[flag] <= MAX_RUNS:
-            _flags[flag] = MAX_RUNS
-    # Value flags
-    if not 0 <= _flags['chance'] <= 100:
-        _flags['chance'] = 100
     return Flags(**_flags)
 
 def setup_logging(filename=__location__, logger_name='sce'):
@@ -643,6 +662,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     ruleset = compile_ruleset(ruleset, cats)
     for line in wordset:
         if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
+            logger.info(f'This word: {line[0]}')
             line[0] = ruleset.apply(line[0])
     if output != 'as-is':
         for i, line in enumerate(wordset):

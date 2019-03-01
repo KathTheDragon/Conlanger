@@ -19,7 +19,7 @@ and non-linear) can be placed on what outputs are considered valid.
 ## SCE
 
 `conlanger.sce` is a module with powerful tools for transforming words according to transformation rules. Documentation
-of the rules can be found [here](https://conworkshop.com/leashy/sce/sce-doc.html).
+of the rules can be found [here](http://www.dragonlinguistics.com/sce/doc.html).
 
 ## Lang
 
