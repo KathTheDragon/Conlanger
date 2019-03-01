@@ -331,35 +331,65 @@ def compile_ruleset(ruleset, cats=None):
             cats = parse_cats(rule, cats)
         elif rule.startswith('!'):  # Meta-rule
             _ruleset.append(rule.strip('!'))
-    # Second pass to create blocks
-    for i, rule in reversed(list(enumerate(_ruleset))):
-        if isinstance(rule, str):
-            rule = regexes[-2].sub(r'\1', rule)  # Clear extra whitespace
-            if ' ' in rule:
-                rule, flags = rule.split()
-            else:
-                flags = ''
+    # Evaluate meta-rules
+    ruleset = make_block(_ruleset)[0]
+    return RuleBlock(ruleset)
+
+def make_block(ruleset, n=None, defs=None):
+    if defs is None:
+        defs = {}
+    else:
+        defs = defs.copy()
+    block = []
+    while len(block) != n and ruleset:
+        rule, ruleset = ruleset[0], ruleset[1:]
+        if isinstance(rule, Rule):
+            block.append(rule)
+        else:
+            _rule = rule  # Save for error messages
             try:
-                flags = parse_flags(flags)
-            except FormatError as e:
-                logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: {e}')
-                continue
-            if ':' in rule:
-                if rule.count(':') > 1:
-                    logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: meta-rules must have at most one argument: {rule}')
-                rule, arg = rule.split(':')
-                try:
-                    arg = int(arg)
-                except ValueError:
-                    logger.warning(f'Meta-rule `{rule} {flags}` failed to compile due to bad formatting: meta-rules must have numeric arguments: {rule}:{arg}')
-            else:
-                arg = 0
-            if rule == 'block':
-                if arg:
-                    _ruleset[i:i+arg+1] = [RuleBlock(_ruleset[i+1:i+arg+1], flags)]
+                if ' ' in rule:
+                    rule, flags = rule.split()
                 else:
-                    _ruleset[i:] = RuleBlock(_ruleset[i+1:], flags)
-    return RuleBlock(_ruleset)
+                    flags = ''
+                flags = parse_flags(flags)
+                rule, arg = validate_arg(rule)
+                if rule == 'block':
+                    if arg is not None:
+                        try:
+                            arg = int(arg)
+                        except ValueError:
+                            raise FormatError('`block` must have an integer argument')
+                    _block, ruleset, defs = make_block(ruleset, arg, defs)
+                    block.append(RuleBlock(_block, flags))
+                elif rule == 'def':
+                    if arg is None:
+                        raise FormatError('`def` must have an argument')
+                    if not ruleset:
+                        raise FormatError('`def` requires a following rule')
+                    [rule], ruleset, defs = make_block(ruleset, 1, defs)
+                    defs[arg] = rule
+                elif rule == 'rule':
+                    if arg is None:
+                        raise FormatError('`rule` must have an argument')
+                    if arg not in defs:
+                        raise FormatError(f'rule `{arg}` has not been defined')
+                    block.append(defs[arg])
+                else:
+                    raise FormatError('unknown meta-rule')
+            except FormatError as e:
+                logger.warning(f'Meta-rule `!{_rule}` failed to compile due to bad formatting: {e}')
+    return block, ruleset, defs
+
+def validate_arg(rule):
+    if ':' not in rule:
+        return rule, None
+    rule, arg = rule.split(':', 1)
+    if arg == '':
+        raise FormatError(f'arguments must not be blank')
+    if ':' in arg:
+        raise FormatError(f'more than one argument may not be given')
+    return rule, arg
 
 regexCat = re.compile(r'\[(?!\])')
 
