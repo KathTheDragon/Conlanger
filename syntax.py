@@ -84,7 +84,7 @@ class Tree():
     
     @property
     def layer(self):
-        return 0 if self.isroot else return (self.parent.layer + 1)
+        return 0 if self.isroot else (self.parent.layer + 1)
     
     ## Tree Size ##
     @property
