@@ -25,7 +25,6 @@ Functions:
 Is it possible to implement a>b>c as notation for a chain shift?
 Think about expanding the options for grapheme handling
 - diacritics?
-Named rules via !def metarule
 Allow ~ in tar and rep
 
 === Style ===

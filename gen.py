@@ -4,9 +4,9 @@ Exceptions:
     ExceededMaxRunsError -- used to terminate generation
 
 Functions:
-    dist       -- provides a power law distribution
+    dist        -- provides a power law distribution
     peaked_dist -- provides a peaked power law distribution
-    populate   -- generates a list of graphemes according to a pattern
+    populate    -- generates a list of graphemes according to a pattern
     gen_word    -- generates a word
     gen_root    -- generates a root
 ''''''

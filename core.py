@@ -21,7 +21,6 @@ Functions:
 
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
-Perhaps @lazyproperty can be revised to not replace itself, and instead store the calculated value within itself
 
 === Features ===
 Something something punctuation

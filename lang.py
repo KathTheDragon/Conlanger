@@ -71,23 +71,17 @@ class Language:
             _config['constraints'] = parse_patterns(_config['constraints'], self.cats)
             _config['sylrange'] = range(_config['sylrange'][0], _config['sylrange'][1]+1)
             self.configs[config] = Config(**_config)
-        self.phonotactics = parse_patterns(phonotactics, self.cats)
+        phonotactics = parse_patterns(phonotactics, self.cats)
+        self.phonotactics = {'nuclei': phonotactics['nuclei'], 'margins': []}
         # Need some default phonotactics instead of empty lists
-        if not self.phonotactics['onsets']:
-            self.phonotactics['onsets'] = parse_patterns('_')
-        if not self.phonotactics['codas']:
-            self.phonotactics['codas'] = parse_patterns('_')
-        left = right = False
-        for i, margin in reversed(list(enumerate(self.phonotactics['margins']))):
-            if not (margin[0] == '#') ^ (margin[-1] == '#'):
-                del self.phonotactics['margins'][i]
-            elif not left and margin[0] == '#':
-                left = True
-            elif not right and margin[-1] == '#':
-                right = True
-        if not left:
+        self.phonotactics['onsets'] = phonotactics['onsets'] or parse_patterns('_')
+        self.phonotactics['codas'] = phonotactics['codas'] or parse_patterns('_')
+        for margin in phonotactics['margins']:
+            if (margin[0] == '#') != (margin[-1] == '#'):
+                self.phonotactics['margins'].append(margin)
+        if not any((margin[0] == '#') for margin in self.phonotactics['margins']):
             self.phonotactics['margins'].extend(parse_patterns('#_'))
-        if not right:
+        if not any((margin[-1] == '#') for margin in self.phonotactics['margins']):
             self.phonotactics['margins'].extend(parse_patterns('_#'))
         self.syllabifier = Syllabifier(self.cats, **self.phonotactics)
     
@@ -100,14 +94,13 @@ class Language:
             data['cats'] = {name: list(cat) for name, cat in self.cats.items()}
         if self._configs != {}:
             data['configs'] = self._configs
-        if isinstance(self.syllabifier, RulesSyllabifier):
-            data['syllabifier'] = []
-            for rule in self.syllabifier.rules:
-            	rule, indices = rule
-            	rule = rule.copy()
-            	for i in reversed(indices):
-            		rule.insert(i, '$')
-            	data['syllabifier'].append(unparse_pattern(rule))
+        data['syllabifier'] = []
+        for rule in self.syllabifier.rules:
+        	rule, indices = rule
+        	rule = rule.copy()
+        	for i in reversed(indices):
+        		rule.insert(i, '$')
+        	data['syllabifier'].append(unparse_pattern(rule))
         if self.phonotactics is not None:
             data['phonotactics'] = {k: [unparse_pattern(pattern) for pattern in v] for k, v in self.phonotactics.items()}
         return data
