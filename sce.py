@@ -59,7 +59,7 @@ class WordUnchanged(LangException):
 # == Classes == #
 class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
     '''Class for representing a sound change rule.
-    
+
     Instance variables:
         rule      -- the rule as a string (str)
         tars      -- target segments (list)
@@ -68,29 +68,29 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         excs      -- exception environments (list)
         otherwise -- the rule to apply if an exception is satisfied (Rule)
         flags     -- flags for altering execution (dict)
-    
+
     Methods:
         apply       -- apply the rule to a word
         check_match -- check if the match is valid
     '''
-    
+
     __slots__ = ()
-    
+
     def __repr__(self):
         return f"Rule('{self!s}')"
-    
+
     def __str__(self):
         return self.rule
-    
+
     def __eq__(self, other):
         return self[1:] == other[1:]
-    
+
     def apply(self, word):
         '''Apply the sound change rule to a single word.
-        
+
         Arguments:
             word -- the word to which the rule is to be applied (Word)
-        
+
         Raises RuleFailed if the rule did not apply to the word.
         Raises WordUnchanged if the word was not changed by the rule.
         '''
@@ -178,7 +178,7 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         if phones == tuple(word):
             raise WordUnchanged
         return word
-    
+
     def check_match(self, match, word):
         pos, rpos = match[:2]
         if any(word.match_env(exc, pos, rpos) for exc in self.excs):  # If there are exceptions, does any match?
@@ -200,17 +200,17 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
 
 class RuleBlock(list):
     '''Groups a block of sound changes together.
-    
+
     Instance variables:
         flags -- flags for altering execution (namedtuple)
     '''
-    
+
     __slots__ = ('flags',)
-    
+
     def __init__(self, ruleset, flags=None):
         self.flags = flags
         list.__init__(self, ruleset)
-    
+
     def apply(self, word):
         applied = False
         rules = []  # We use a list to store rules, since they may be applied multiple times
@@ -255,11 +255,11 @@ Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, persist, chance')
 # == Functions == #
 def parse_wordset(wordset, cats=None, syllabifier=None):
     '''Parses a wordlist.
-    
+
     Arguments:
         wordset -- the words to be parsed (str)
         graphs  -- list of graphemes used to parse the words (list)
-    
+
     Returns a list.
     '''
     if isinstance(wordset, str):
@@ -286,20 +286,13 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
         _wordset.append(line)
     return _wordset
 
-regexes = (re.compile(r'\s+(>\s+[/!]\s+)'),  # Used to delete whitespace before > / or > !
-    re.compile(r'\s+(>\^\??|[>/!|&@])\s+'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
-    re.compile(r'^([+-])\s+'),  # Used to delete whitespace after either of initial +-
-    re.compile(r'([:;,^])\s+'),  # Used to delete whitespace after any of :;,^
-    re.compile(r'(?<!{)([>/!])')  # Used to insert whitespace before field markers
-    )
-
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
-    
+
     Arguments:
         ruleset -- the set of rules to be compiled (str)
         cats    -- the initial categories to be used to compile the rules (dict)
-    
+
     Returns a list.
     '''
     if isinstance(ruleset, str):
@@ -392,9 +385,17 @@ def validate_arg(rule):
 
 regexCat = re.compile(r'\[(?!\])')
 
+regexes = (
+    re.compile(r'\s+(>\s+[/!]\s+)'),  # Used to delete whitespace before > / or > !
+    re.compile(r'(?:^|\s+)(>\^\??|[>/!|&@])(?:\s+|$)'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
+    re.compile(r'^([+-])\s+'),  # Used to delete whitespace after either of initial +-
+    re.compile(r'([:;,^])\s+'),  # Used to delete whitespace after any of :;,^
+    re.compile(r'(?<!{)([>/!])')  # Used to insert whitespace before field markers
+)
+
 def compile_rule(rule, cats=None):
     '''Factory function for Rule objects
-    
+
     Arguments:
         rule -- the rule as a string (str)
         cats -- dictionary of categories used to interpret the rule (dict)
@@ -468,11 +469,11 @@ def compile_rule(rule, cats=None):
 
 def parse_tars(tars, cats=None):
     '''Parse the targets of a sound change rule.
-    
+
     Arguments:
         tars -- the targets to be parsed (str)
         cats -- dictionary of categories (dict)
-    
+
     Returns a list
     '''
     _tars = []
@@ -495,11 +496,11 @@ def parse_tars(tars, cats=None):
 
 def parse_reps(reps, cats=None):
     '''Parse the replacements of a sound change rule.
-    
+
     Arguments:
         reps -- the replacements to be parsed (str)
         cats  -- dictionary of categories (dict)
-    
+
     Returns a list
     '''
     _reps = []
@@ -527,11 +528,11 @@ def parse_reps(reps, cats=None):
 
 def parse_envs(envs, cats=None):
     '''Parse the environments of a sound change rule.
-    
+
     Arguments:
         envs -- the environments to be parsed (str)
         cats  -- dictionary of categories (dict)
-    
+
     Returns a list
     '''
     _envs = []
@@ -572,10 +573,10 @@ def parse_envs(envs, cats=None):
 
 def parse_flags(flags):
     '''Parse the flags of a sound change rule.
-    
+
     Arguments:
         flags -- the flags to be parsed (str)
-    
+
     Returns a namedtuple.
     '''
     binaryflags = ('ignore', 'rtl')
@@ -621,14 +622,14 @@ def setup_logging(filename=__location__, logger_name='sce'):
 
 def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     '''Applies a set of sound change rules to a set of words.
-    
+
     Arguments:
         wordset     -- the words to which the rules are to be applied (list)
         ruleset     -- the rules which are to be applied to the words (RuleBlock)
         cats        -- the initial categories to be used in ruleset compiling (dict)
         syllabifier -- the syllabifier function to use for syllabifying words (RulesSyllabifier)
         output      -- what form to provide the output in - one of 'list', 'as-is', 'str' (str)
-    
+
     Returns a str or list.
     '''
     if not ruleset or not wordset:  # One of these is blank so do nothing
