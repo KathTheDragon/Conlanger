@@ -33,13 +33,13 @@ Handling of optionals needs a lot of work
 class Token():
     __slots__ = ()
     type = None
-    
+
     def __str__(self):
         return ''
-    
+
     def __repr__(self):
         return f'Token({self})'
-    
+
     def __eq__(self, other):
         if isinstance(other, str):
             return str(self) == other
@@ -47,7 +47,7 @@ class Token():
             return str(self) == str(other)
         else:
             return NotImplemented
-    
+
     # This method must guarantee that the last two return values are [] if the first is False
     def match(self, word, pos, ix, step, istep):
         # matched, length, ilength, stack, catixes
@@ -57,40 +57,40 @@ class Token():
 class Grapheme(Token):
     __slots__ = ('grapheme',)
     type = 'grapheme'
-    
+
     def __init__(self, grapheme):
         self.grapheme = grapheme
-    
+
     def __str__(self):
         return self.grapheme
-    
+
     def match(self, word, pos, ix, step, istep):
         return self.grapheme == word[pos], step, istep, [], []
 
 class Ditto(Token):
     __slots__ = ()
     type = 'ditto'
-    
+
     def __str__(self):
         return '"'
-    
+
     def match(self, word, pos, ix, step, istep):
         return word[pos] == word[pos-1], step, istep, [], []
 
 class SylBreak(Token):
     __slots__ = ()
     type = 'sylbreak'
-    
+
     def __str__(self):
         return '$'
-    
+
     def match(self, word, pos, ix, step, istep):
         return (pos in word.syllables), 0, istep, [], []
 
 class Category(Token):
     __slots__ = ('cat',)
     type = 'category'
-    
+
     def __init__(self, cat, cats):
         from .core import FormatError, Cat
         cat = cat[1:-1]
@@ -100,19 +100,19 @@ class Category(Token):
             self.cat = cats[cat]
         else:
             raise FormatError(f'`{token}` is not a defined category')
-    
+
     def __str__(self):
         if self.cat.name is None:
             return f'[{self.cat}]'
         else:
             return f'[{self.cat.name}]'
-    
+
     def __eq__(self, other):
         if isinstance(other, Category):
             return self.cat == other.cat
         else:
             return self.cat == other
-    
+
     def match(self, word, pos, ix, step, istep):
         if word[pos] in self.cat:  # This might change
             return True, step, istep, [], [self.cat.index(word[pos])]
@@ -125,7 +125,7 @@ class Wildcard(Token):
     def __init__(self, wildcard):
         self.greedy = not wildcard.endswith('?')
         self.extended = wildcard.startswith('**')
-        
+
     def __str__(self):
         return ('**' if self.extended else '*') + ('' if self.greedy else '?')
 
@@ -142,13 +142,13 @@ class Wildcard(Token):
 class WildcardRep(Token):
     __slots__ = ('greedy',)
     type = 'wildcardrep'
-    
+
     def __init__(self, wildcardrep):
         self.greedy = not wildcardrep.endswith('?')
-        
+
     def __str__(self):
         return '{*}' if self.greedy else '{*?}'
-    
+
     def match(self, word, pos, ix, step, istep):
         if not self.greedy:
             istep *= -1
@@ -158,56 +158,56 @@ class WildcardRep(Token):
 class Optional(Token):
     __slots__ = ('greedy', 'pattern')
     type = 'optional'
-    
+
     def __init__(self, optional, cats):
         self.greedy = not optional.endswith('?')
         self.pattern = parse_pattern(optional.rstrip('?')[1:-1], cats)
         if len(self.pattern) == 1 and isinstance(self.pattern[0], Wildcard):
             self.pattern[0].greedy = self.greedy
-    
+
     def __str__(self):
         return '()' if self.greedy else '()?'
-    
+
     # Somehow I need to adapt the special matching code for this framework - won't be easy
 
 class Comparison(Token):
     __slots__ = ('operation', 'value')
     type = 'comparison'
-    
+
     def __init__(self, comparison):
         op = comparison[0]
         if comparison[1] == '=' or op == '=':
             op += '='
         self.operation = op
         self.value = int(comparison.strip('=<>'))
-    
+
     def __str__(self):
         return f'{{{self.operation}{self.value}}}'.replace('==', '=')
 
 class TargetRef(Token):
     __slots__ = ('direction')
     type = 'targetref'
-    
+
     def __init__(self, targetref):
         self.direction = 1 if targetref == '%' else -1 if targetref == '<' else None
-    
+
     def __str__(self):
         return '%' if self.direction == 1 else '<'
-    
+
     def resolve_target(self, target):
         return [Grapheme(graph) for graph in (target if self.direction == 1 else reversed(target))]
 
 def match_pattern(word, pattern, start, end, step, stack=None):
     '''Match a pattern sequence to the word.
-    
+
     Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
-    
+
     Arguments:
         word -- the word to match to
         pattern -- the sequence being matched
         start, end, step -- determine the slice of the word to match within
         stack -- used to pass stack references into an optional segment
-    
+
     Returns a tuple.
     '''
     pos = start if step > 0 else end-1
@@ -225,7 +225,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
     pattern = pattern.copy()
     if step < 0:
         for i, token in enumerate(pattern):
-            if isinstance(token, tuple) and token[0].startswith('*'):
+            if token.type == 'wildcardrep':
                 pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
     matched = True
     while 0 <= ix < len(pattern):
@@ -289,7 +289,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
         return True, pos, catixes, stack
     else:
         return True, pos, catixes
-    
+
 def escape(string):
     while True:
         ix = string.find('\\')
@@ -300,11 +300,11 @@ def escape(string):
 
 def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
-    
+
     Arguments:
         pattern -- the input string using pattern notation (str or Word)
         cats    -- a list of cats to use for interpreting categories (list)
-    
+
     Returns a list
     '''
     from .core import Word, Cat, split, parse_word
@@ -358,10 +358,10 @@ def parse_pattern(pattern, cats=None):
 
 def parse_patterns(patterns, cats=None):
     '''Parses generation patterns.
-    
+
     Arguments:
         patterns -- set of patterns to parse (str, list, or dict)
-    
+
     Returns a list
     '''
     if isinstance(patterns, str):
