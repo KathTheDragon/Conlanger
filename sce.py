@@ -24,8 +24,14 @@ Functions:
 === Features ===
 Is it possible to implement a>b>c as notation for a chain shift?
 Think about expanding the options for grapheme handling
-- diacritics?
+- diacritics
 Allow ~ in tar and rep
+Look into *not* removing category definitions, to aid extracting graph definitions
+Implement more category operations
+- intersection
+-- feature-style? [+A +B -C] == [A] && [B] && ~[C]
+More format conversion metarules?
+- !sca2
 
 === Style ===
 Consider where to raise/handle exceptions

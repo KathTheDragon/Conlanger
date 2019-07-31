@@ -21,9 +21,11 @@ Functions:
 
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
+Regex parser
 
 === Features ===
 Something something punctuation
+Escape sequences
 
 === Style ===
 Consider where to raise/handle exceptions
@@ -50,7 +52,7 @@ class memoisedproperty(object):
     def __init__(self, fget):
         self.fget = fget
         self.func_name = fget.__name__
-    
+
     def __get__(self, obj, cls):
         if obj is None:
             return None
@@ -61,12 +63,12 @@ class memoisedproperty(object):
 # == Classes == #
 class Cat(list):
     '''Represents a category of graphemes.'''
-    
+
     __slots__ = ('name',)
-    
+
     def __init__(self, values=None, cats=None, name=None):
         '''Constructor for Cat.
-        
+
         Arguments:
             values -- the values in the category (str, list)
             cats   -- dictionary of categories (dict)
@@ -91,39 +93,39 @@ class Cat(list):
             else:
                 _values.append(value)
         list.__init__(self, _values)
-    
+
     def __repr__(self):
         s = str(self)
         if "'" not in s:
             return f"Cat('{s}')"
         else:
             return f'Cat("{s}")'
-    
+
     def __str__(self):
         return ', '.join(self)
-    
+
     def __and__(self, cat):
         return Cat(value for value in self if value in cat)
-    
+
     def __add__(self, cat):
         return Cat(list.__add__(self, cat))
-    
+
     def __iadd__(self, cat):
         return NotImplemented
-    
+
     def __sub__(self, cat):
         return Cat(value for value in self if value not in cat)
-    
+
     def __le__(self, cat):
         return all(value in cat for value in self)
 
 class Word(list):
     '''Represents a word as a list of graphemes.
-    
+
     Instance variables:
         graphs      -- a category of graphemes (Cat)
         syllabifier -- a function that syllabifies the input word (RulesSyllabifier)
-    
+
     Methods:
         find          -- find a match of a list using pattern notation to the word
         match_pattern -- match a list using pattern notation to the word
@@ -131,12 +133,12 @@ class Word(list):
         apply_match   -- apply a single match to the word
         strip         -- remove leading and trailing graphemes
     '''
-    
+
     __slots__ = ('graphs', 'syllabifier', '_syllables')
-    
+
     def __init__(self, lexeme=None, graphs=None, syllabifier=None):
         '''Constructor for Word
-        
+
         Arguments:
             lexeme    -- the word (str)
             syllables -- list of tuples representing syllables (list)
@@ -158,24 +160,24 @@ class Word(list):
         list.__init__(self, lexeme)
         self.syllabifier = syllabifier
         self._syllables = None
-    
+
     @property
     def syllables(self):
         if self._syllables is None and self.syllabifier is not None:
             self._syllables = self.syllabifier(self)
         return self._syllables
-    
+
     def __repr__(self):
         word = str(self)
         if "'" in word:
             return f'Word("{word}")'
         else:
             return f"Word('{word}')"
-    
+
     def __str__(self):
         word = unparse_word(self, self.graphs)
         return word.strip(self.graphs[0]+'#').replace('#', ' ')
-    
+
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
@@ -183,16 +185,16 @@ class Word(list):
             return any(self.match_pattern(item[0], index)[0] for index in item[1])
         else:
             return list.__contains__(self, item)
-    
+
     def __getitem__(self, item):
         if isinstance(item, slice):
             return Word(list.__getitem__(self, item), self.graphs, self.syllabifier)
         else:
             return list.__getitem__(self, item)
-    
+
     __setitem__ = None
     __delitem__ = None
-    
+
     def __add__(self, other):
         graphs = self.graphs
         if isinstance(other, Word):
@@ -201,19 +203,19 @@ class Word(list):
         elif isinstance(other, str):
             other = parse_word(other, graphs)
         return Word(list(self) + other, graphs, self.syllabifier)
-    
+
     def __mul__(self, other):
         return Word(list(self) * other, self.graphs, self.syllabifier)
-    
+
     def __rmul__(self, other):
         return Word(list(self) * other, self.graphs, self.syllabifier)
-    
+
     def __iadd__(*args):
         return NotImplemented
-    
+
     def __imul__(*args):
         return NotImplemented
-    
+
     append = None
     clear = None
     copy = None
@@ -223,7 +225,7 @@ class Word(list):
     remove = None
     reverse = None
     sort = None
-    
+
     def strip(self, chars=None):
         if chars is None:
             chars = '#'
@@ -235,15 +237,15 @@ class Word(list):
                 if self[i+1] in chars:
                     end = i+1
         return self[start:end]
-    
+
     def find(self, sub, start=None, end=None):
         '''Match a sequence using pattern notation to the word.
-        
+
         Arguments:
             sub   -- the list to be found (list)
             start -- the index of the beginning of the range to check (int)
             end   -- the index of the end of the range to check (int)
-        
+
         Returns an int
         '''
         start, end = slice_indices(self, start, end)
@@ -264,30 +266,30 @@ class Word(list):
                 if match:
                     return pos
         return -1
-    
+
     def match_pattern(self, pattern, start=None, end=None, step=1):
         '''Match a pattern sequence to the word.
-        
+
         Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
-        
+
         Arguments:
             pattern -- the sequence being matched
             start, end, step -- determine the slice of the word to match within
             stack -- used to pass stack references into an optional segment
-        
+
         Returns a tuple.
         '''
         start, end = slice_indices(self, start, end)
         return match_pattern(self, pattern, start, end, step)
-    
+
     def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
-        
+
         Arguments:
             env  -- the environment to be matched (list)
             pos  -- the index of the left edge of the target (int)
             rpos -- the index past the right edge of the target (int)
-        
+
         Returns a bool
         '''
         if isinstance(env, tuple):
@@ -311,15 +313,15 @@ class Word(list):
             matchleft = False if left else True
         matchright = self.match_pattern(right, rpos)[0]
         return matchleft and matchright
-    
+
     def apply_match(self, match, rep):
         '''Apply a replacement to a word
-        
+
         Arguments:
             match -- the match to be used
             rep   -- the replacement to be used
             word  -- the word to be changed
-        
+
         Returns a Word.
         '''
         pos, rpos, catixes = match[:3]
@@ -363,7 +365,7 @@ class Word(list):
 
 class Syllabifier:
     slots = ('rules',)
-    
+
     def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
         onsets = parse_patterns(onsets)
         nuclei = parse_patterns(nuclei)
@@ -381,7 +383,7 @@ class Syllabifier:
         rules = self.get_non_finals(onsets, nuclei, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         self.rules = [rule for rule in self.rules if self.check_valid(rule[0], constraints)]
-    
+
     @staticmethod
     def get_non_finals(onsets, nuclei, codas):
         rules = []
@@ -411,7 +413,7 @@ class Syllabifier:
                     rank = crank + orank + nrank
                     rules.append((pattern, breaks, rank))
         return rules
-    
+
     @staticmethod
     def get_finals(codas, margins):
         rules = []
@@ -429,7 +431,7 @@ class Syllabifier:
                 rank = crank + mrank
                 rules.append((pattern, breaks, rank))
         return rules
-    
+
     @staticmethod
     def check_valid(rule, constraints):
         for constraint in constraints:
@@ -449,7 +451,7 @@ class Syllabifier:
                 else:
                     return False
         return True
-    
+
     def __call__(self, word):
         breaks = []
         # Step through the word
@@ -484,12 +486,12 @@ def resolve_target_reference(pattern, tar):
 
 def slice_indices(iter, start=None, end=None):
     '''Calculate absolute indices from slice indices on an iterable.
-    
+
     Arguments:
         iter  -- the iterable being sliced
         start -- the index of the start of the slice
         end   -- the index of the end of the slice
-    
+
     Returns a tuple of 2 ints.
     '''
     if start is None:
@@ -504,11 +506,11 @@ def slice_indices(iter, start=None, end=None):
 
 def parse_cats(cats, initial_cats=None):
     '''Parses a set of categories.
-    
+
     Arguments:
         cats -- the set of categories to be parsed (str)
         initial_cats -- prior categories (dict)
-    
+
     Returns a dict.
     '''
     if initial_cats is None:
@@ -543,11 +545,11 @@ def parse_cats(cats, initial_cats=None):
 
 def parse_word(word, graphs=None):
     '''Parse a string of graphemes.
-    
+
     Arguments:
         word   -- the word to be parsed (str)
         graphs -- category of graphemes (Cat)
-    
+
     Returns a list.
     '''
     # Black magic
@@ -595,13 +597,13 @@ def unparse_word(wordin, graphs=None):
 
 def split(string, sep=None, nesting=None, minimal=False):
     '''Nesting-aware string splitting.
-    
+
     Arguments:
         string  -- the string to be split (str)
         sep     -- the character(s) to split on (str)
         nesting -- a tuple of the form (depth, open, close) containing the nesting depth, and opening and closing nesting characters (tuple)
         minimal -- whether or not to perform the minimal number of splits, similar to str.split() with no arguments
-    
+
     Returns a list.
     '''
     if sep is None:
