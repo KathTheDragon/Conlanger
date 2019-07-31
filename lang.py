@@ -37,22 +37,22 @@ Config = namedtuple('Config', 'patterns, constraints, sylrange, sylmode, pattern
 
 class Language:
     '''Class for representing a single language.
-    
+
     Instance variables:
         name        -- language name (str)
         cats        -- grapheme categories (dict)
         wordConfig  -- word configuration data (Config)
         syllabifier -- syllabification function (RulesSyllabifier)
-    
+
     Methods:
         gen_word      -- generate words
         apply_ruleset -- apply a sound change ruleset to a wordset
     '''
     __slots__ = ('name', 'cats', 'configs', 'phonotactics', 'syllabifier')
-    
+
     def __init__(self, name='', cats=None, configs=None, phonotactics=None, syllabifier=None):
         '''Constructor for Language().
-        
+
         Arguments:
             name    -- language name (str)
             cats    -- grapheme categories (dict)
@@ -84,7 +84,7 @@ class Language:
         if not any((margin[-1] == '#') for margin in self.phonotactics['margins']):
             self.phonotactics['margins'].extend(parse_patterns('_#'))
         self.syllabifier = Syllabifier(self.cats, **self.phonotactics)
-    
+
     @property
     def data(self):
         data = {}
@@ -104,14 +104,14 @@ class Language:
         if self.phonotactics is not None:
             data['phonotactics'] = {k: [unparse_pattern(pattern) for pattern in v] for k, v in self.phonotactics.items()}
         return data
-    
+
     def gen(self, config, num=1):
         '''Generates 'num' words using 'config'.
-        
+
         Arguments:
             config -- config data to use
             num    -- number of words to generate, 0 generates every possible word (int)
-        
+
         Returns a list
         '''
         if config not in self.configs:
@@ -119,15 +119,15 @@ class Language:
         if num == 0:  # Generate every possible word, unimplemented
             return []
         return [gen.gen_word(self.configs[config], self.cats['graphs'], self.syllabifier) for i in range(num)]
-    
+
     def apply_ruleset(self, wordset, ruleset, output='list'):
         '''Runs the sound change 'ruleset' on the 'wordset'.
-        
+
         Arguments:
             wordset   -- the words to be changed (str, list)
             ruleset   -- the sound changes to apply (str, list)
             to_string -- whether or not to have string output
-        
+
         Returns a str or list
         '''
         return sce.run(wordset, ruleset, self.cats, self.syllabifier, output)
@@ -135,10 +135,10 @@ class Language:
 # == Functions == #
 def load_lang(name):
     '''Loads language data from file.
-    
+
     Arguments:
         name -- the name of the language file to load from
-    
+
     Returns a Language
     '''
     with open('langs/{}.dat'.format(name.lower()), 'r', encoding='utf-8') as f:
@@ -147,7 +147,7 @@ def load_lang(name):
 
 def save_lang(lang):
     '''Saves a language to file.
-    
+
     Arguments:
         lang -- the Language to save
     '''
@@ -167,7 +167,7 @@ def unparse_pattern(pattern):
         if isinstance(token, int):  # Integer repetition
             pattern[i] = f'{{{pattern[i]}}}'
         # This probably should be moved to _pattern
-        elif token.type == 'optional':
+        elif token.type == 'Optional':
             pattern[i] = f'({unparse_pattern(token.pattern)})'
             if not token.greedy:
                 pattern[i] = pattern[i] + '?'

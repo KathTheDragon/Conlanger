@@ -251,7 +251,7 @@ class Word(list):
         start, end = slice_indices(self, start, end)
         if isinstance(sub, Word):
             sub = parse_pattern(sub)
-        if sub and sub[-1].type == 'comparison':  # Counting
+        if sub and sub[-1].type == 'Comparison':  # Counting
             matches = 0
             op, count = sub[-1].operation, sub[-1].value
             for pos in range(start, end):
@@ -331,15 +331,15 @@ class Word(list):
             # Resolve tokens
             ix = 0
             for i, token in enumerate(rep):
-                if token.type == 'grapheme':
+                if token.type == 'Grapheme':
                     rep[i] = token.grapheme
-                elif token.type == 'category':
+                elif token.type == 'Category':
                     if not catixes:
                         raise RuleError('replacement contains a category but target did not')
                     cat = token.cat
                     rep[i] = cat[catixes[ix] % len(cat)]
                     ix = (ix + 1) % len(catixes)
-                elif token.type == 'ditto':
+                elif token.type == 'Ditto':
                     rep[i] = rep[i-1] if i != 0 else self[pos-1]
                 else:
                     rep[i] = ''
@@ -480,7 +480,7 @@ class Syllabifier:
 def resolve_target_reference(pattern, tar):
     pattern = pattern.copy()
     for i, token in reversed(list(enumerate(pattern))):
-        if token.type == 'targetref':
+        if token.type == 'TargetRef':
             pattern[i:i+1] = token.resolve_target(tar)
     return pattern
 

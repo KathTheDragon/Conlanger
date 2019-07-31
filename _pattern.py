@@ -30,9 +30,8 @@ Handling of optionals needs a lot of work
 === Style ===
 '''
 
-class Token():
+class Token:
     __slots__ = ()
-    type = None
 
     def __str__(self):
         return ''
@@ -48,6 +47,10 @@ class Token():
         else:
             return NotImplemented
 
+    @property
+    def type(self):
+        return self.__class__.__name__
+
     # This method must guarantee that the last two return values are [] if the first is False
     def match(self, word, pos, ix, step, istep):
         # matched, length, ilength, stack, catixes
@@ -56,7 +59,6 @@ class Token():
 ## Matching tokens ##
 class Grapheme(Token):
     __slots__ = ('grapheme',)
-    type = 'grapheme'
 
     def __init__(self, grapheme):
         self.grapheme = grapheme
@@ -69,7 +71,6 @@ class Grapheme(Token):
 
 class Ditto(Token):
     __slots__ = ()
-    type = 'ditto'
 
     def __str__(self):
         return '"'
@@ -79,7 +80,6 @@ class Ditto(Token):
 
 class SylBreak(Token):
     __slots__ = ()
-    type = 'sylbreak'
 
     def __str__(self):
         return '$'
@@ -89,7 +89,6 @@ class SylBreak(Token):
 
 class Category(Token):
     __slots__ = ('cat',)
-    type = 'category'
 
     def __init__(self, cat, cats):
         from .core import FormatError, Cat
@@ -120,7 +119,6 @@ class Category(Token):
 
 class Wildcard(Token):
     __slots__ = ('greedy', 'extended')
-    type = 'wildcard'
 
     def __init__(self, wildcard):
         self.greedy = not wildcard.endswith('?')
@@ -141,7 +139,6 @@ class Wildcard(Token):
 
 class WildcardRep(Token):
     __slots__ = ('greedy',)
-    type = 'wildcardrep'
 
     def __init__(self, wildcardrep):
         self.greedy = not wildcardrep.endswith('?')
@@ -157,7 +154,6 @@ class WildcardRep(Token):
 ## Non-matching tokens ##
 class Optional(Token):
     __slots__ = ('greedy', 'pattern')
-    type = 'optional'
 
     def __init__(self, optional, cats):
         self.greedy = not optional.endswith('?')
@@ -172,7 +168,6 @@ class Optional(Token):
 
 class Comparison(Token):
     __slots__ = ('operation', 'value')
-    type = 'comparison'
 
     def __init__(self, comparison):
         op = comparison[0]
@@ -186,7 +181,6 @@ class Comparison(Token):
 
 class TargetRef(Token):
     __slots__ = ('direction')
-    type = 'targetref'
 
     def __init__(self, targetref):
         self.direction = 1 if targetref == '%' else -1 if targetref == '<' else None
@@ -225,7 +219,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
     pattern = pattern.copy()
     if step < 0:
         for i, token in enumerate(pattern):
-            if token.type == 'wildcardrep':
+            if token.type == 'WildcardRep':
                 pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
     matched = True
     while 0 <= ix < len(pattern):
@@ -242,14 +236,14 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                 else:
                     _stack = []
                 if token.greedy:  # Greedy
-                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
+                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'WildcardRep':  # We need to make sure to step past a wildcard repetition
                         stack.append((pos, ix+istep*2))
                     else:
                         stack.append((pos, ix+istep))
                     ilength = step
                 elif matched:  # Non-greedy, we stepped in normally
                     stack.append((pos, ix))
-                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'wildcardrep':  # We need to make sure to step past a wildcard repetition
+                    if ix < len(pattern)-istep and pattern[ix+istep].type == 'WildcardRep':  # We need to make sure to step past a wildcard repetition
                         ilength = istep*2
                     else:
                         ilength = istep
@@ -325,7 +319,7 @@ def parse_pattern(pattern, cats=None):
         if not token or token == '[]':  # Blank or null
             del pattern[i]
         elif token[0] == '(':  # Optional
-            if i < len(pattern)-1 and pattern[i+1].type == 'wildcardrep':
+            if i < len(pattern)-1 and pattern[i+1].type == 'WildcardRep':
                 token = token.rstrip('?') if pattern[i+1].greedy else (token+'?')
             pattern[i] = Optional(token, cats)
             # To-do - reimplement flattening optionals
