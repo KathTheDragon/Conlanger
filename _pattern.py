@@ -9,6 +9,8 @@ Classes:
     Wildcard    -- Token matching one or more arbitrary segments
     WildcardRep -- Token matching one or more copies of the previous token
     Optional    -- Token matching an optional sequence of tokens
+    Comparison  -- Token used for indicating the number of another token
+    TargetRef   -- Token used to refer to the target
 
 Functions:
     escape         -- processes escaped characters in a string
@@ -29,15 +31,17 @@ Handling of optionals needs a lot of work
 
 === Style ===
 '''
+from dataclasses import dataclass, InitVar
+from typing import Dict, List
+from .core import FormatError
 
+@dataclass(repr=False, eq=False)
 class Token:
-    __slots__ = ()
-
     def __str__(self):
         return ''
 
     def __repr__(self):
-        return f'Token({self})'
+        return f'{self.type}({str(self)!r})'
 
     def __eq__(self, other):
         if isinstance(other, str):
@@ -51,54 +55,49 @@ class Token:
     def type(self):
         return self.__class__.__name__
 
+    @classmethod
+    def make(cls, string=None, cats=None):
+        return cls()
+
     # This method must guarantee that the last two return values are [] if the first is False
     def match(self, word, pos, ix, step, istep):
         # matched, length, ilength, stack, catixes
         return False, 0, 0, [], []
 
 ## Matching tokens ##
+@dataclass(repr=False, eq=False)
 class Grapheme(Token):
-    __slots__ = ('grapheme',)
-
-    def __init__(self, grapheme):
-        self.grapheme = grapheme
+    grapheme: str
 
     def __str__(self):
         return self.grapheme
 
+    @staticmethod
+    def make(string, cats=None):
+        return Grapheme(grapheme=string)
+
     def match(self, word, pos, ix, step, istep):
         return self.grapheme == word[pos], step, istep, [], []
 
+@dataclass(repr=False, eq=False)
 class Ditto(Token):
-    __slots__ = ()
-
     def __str__(self):
         return '"'
 
     def match(self, word, pos, ix, step, istep):
         return word[pos] == word[pos-1], step, istep, [], []
 
+@dataclass(repr=False, eq=False)
 class SylBreak(Token):
-    __slots__ = ()
-
     def __str__(self):
         return '$'
 
     def match(self, word, pos, ix, step, istep):
         return (pos in word.syllables), 0, istep, [], []
 
+@dataclass(repr=False, eq=False)
 class Category(Token):
-    __slots__ = ('cat',)
-
-    def __init__(self, cat, cats):
-        from .core import FormatError, Cat
-        cat = cat[1:-1]
-        if ',' in cat:  # Nonce cat
-            self.cat = Cat(cat, cats)
-        elif cat in cats:
-            self.cat = cats[cat]
-        else:
-            raise FormatError(f'`{token}` is not a defined category')
+    cat: Cat
 
     def __str__(self):
         if self.cat.name is None:
@@ -112,20 +111,43 @@ class Category(Token):
         else:
             return self.cat == other
 
+    @staticmethod
+    def make(string, cats=None):
+        from .core import Cat
+        if cats is None:
+            cats = {}
+        if string.startswith('[') and string.endswith(']'):
+            cat = string[1:-1]
+        else:
+            raise FormatError(f'{string!r} is not a valid category')
+        if ',' in cat:  # Nonce cat
+            return Category(cat=Cat(cat, cats))
+        elif cat in cats:
+            return Category(cat=cats[cat])
+        else:
+            raise FormatError(f'{string!r} is not a defined category')
+
     def match(self, word, pos, ix, step, istep):
         if word[pos] in self.cat:  # This might change
             return True, step, istep, [], [self.cat.index(word[pos])]
         return False, 0, 0, [], []
 
+@dataclass(repr=False, eq=False)
 class Wildcard(Token):
-    __slots__ = ('greedy', 'extended')
-
-    def __init__(self, wildcard):
-        self.greedy = not wildcard.endswith('?')
-        self.extended = wildcard.startswith('**')
+    greedy: bool
+    extended: bool
 
     def __str__(self):
         return ('**' if self.extended else '*') + ('' if self.greedy else '?')
+
+    @staticmethod
+    def make(string, cats=None):
+        if string in ('*', '**', '*?', '**?'):
+            greedy = not string.endswith('?')
+            extended = string.startswith('**')
+            return Wildcard(greedy=greedy, extended=extended)
+        else:
+            raise FormatError(f'{string!r} is an invalid wildcard')
 
     def match(self, word, pos, ix, step, istep):
         if self.extended or word[pos] != '#':
@@ -137,14 +159,21 @@ class Wildcard(Token):
             return True, step, istep, stack, []
         return False, 0, 0, [], []
 
+@dataclass(repr=False, eq=False)
 class WildcardRep(Token):
-    __slots__ = ('greedy',)
-
-    def __init__(self, wildcardrep):
-        self.greedy = not wildcardrep.endswith('?')
+    greedy: bool
 
     def __str__(self):
         return '{*}' if self.greedy else '{*?}'
+
+    @staticmethod
+    def make(string, cats=None):
+        if string == '{*}':
+            return WildcardRep(greedy=True)
+        elif string == '{*?}':
+            return WildcardRep(greedy=False)
+        else:
+            raise FormatError(f'{string!r} is an invalid wildcard repetition')
 
     def match(self, word, pos, ix, step, istep):
         if not self.greedy:
@@ -152,41 +181,63 @@ class WildcardRep(Token):
         return True, 0, istep, [(pos, ix-istep)], []
 
 ## Non-matching tokens ##
+@dataclass(repr=False, eq=False)
 class Optional(Token):
-    __slots__ = ('greedy', 'pattern')
-
-    def __init__(self, optional, cats):
-        self.greedy = not optional.endswith('?')
-        self.pattern = parse_pattern(optional.rstrip('?')[1:-1], cats)
-        if len(self.pattern) == 1 and isinstance(self.pattern[0], Wildcard):
-            self.pattern[0].greedy = self.greedy
+    greedy: bool
+    pattern: List[Token]
 
     def __str__(self):
-        return '()' if self.greedy else '()?'
+        pattern = ''.join(str(token) for token in self.pattern)  # Could be improved probably
+        return f'({pattern})' if self.greedy else f'({pattern})?'
+
+    @staticmethod
+    def make(string, cats=None):
+        greedy = not string.endswith('?')
+        pattern = parse_pattern(string.rstrip('?')[1:-1], cats)
+        if len(pattern) == 1 and isinstance(pattern[0], Wildcard):
+            pattern[0].greedy = greedy
+        return Optional(greedy=greedy, pattern=pattern)
 
     # Somehow I need to adapt the special matching code for this framework - won't be easy
 
+@dataclass(repr=False, eq=False)
 class Comparison(Token):
-    __slots__ = ('operation', 'value')
-
-    def __init__(self, comparison):
-        op = comparison[0]
-        if comparison[1] == '=' or op == '=':
-            op += '='
-        self.operation = op
-        self.value = int(comparison.strip('=<>'))
+    operation: str
+    value: int
 
     def __str__(self):
         return f'{{{self.operation}{self.value}}}'.replace('==', '=')
 
-class TargetRef(Token):
-    __slots__ = ('direction')
+    @staticmethod
+    def make(string, cats=None):
+        if not string.startswith('{') or not string.endswith('}'):
+            raise FormatError(f'{string!r} is an invalid comparison')
+        for op in ('==', '=', '!=', '>=', '>', '<=', '<'):
+            if string.startswith(op):
+                try:
+                    value = int(string[len(op):])
+                except ValueError:
+                    raise FormatError(f'{string!r} has an invalid value')
+                if op == '=':
+                    op = '=='
+                return Comparison(operation=op, value=value)
+        raise FormatError(f'{string!r} does not have a valid operation')
 
-    def __init__(self, targetref):
-        self.direction = 1 if targetref == '%' else -1 if targetref == '<' else None
+@dataclass(repr=False, eq=False)
+class TargetRef(Token):
+    direction: int
 
     def __str__(self):
         return '%' if self.direction == 1 else '<'
+
+    @staticmethod
+    def make(string, cats=None):
+        if string == '%':
+            return TargetRef(direction=1)
+        elif string == '<':
+            return TargetRef(direction=-1)
+        else:
+            raise FormatError(f'{string!r} is not a target reference')
 
     def resolve_target(self, target):
         return [Grapheme(graph) for graph in (target if self.direction == 1 else reversed(target))]
