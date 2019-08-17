@@ -250,6 +250,98 @@ class TargetRef(Element):
     def resolve_target(self, target):
         return [Grapheme(graph) for graph in (target if self.direction == 1 else reversed(target))]
 
+def escape(string):
+    while True:
+        ix = string.find('\\')
+        if ix == -1:
+            break
+        string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
+    return string
+
+def parse_pattern(pattern, cats=None):
+    '''Parse a string using pattern notation.
+
+    Arguments:
+        pattern -- the input string using pattern notation (str or Word)
+        cats    -- a list of cats to use for interpreting categories (list)
+
+    Returns a list
+    '''
+    from .core import Word, Cat, split, parse_word
+    if isinstance(pattern, Word):
+        return [Grapheme(graph) for graph in Word]
+    if cats is not None and 'graphs' in cats:
+        graphs = cats['graphs']
+    else:
+        graphs = Cat("'")
+    for char in '([{}])*?"$%<':
+        pattern = pattern.replace(char, f' {char} ')
+    pattern = pattern.replace('  ?', '?').replace('*  *', '**')
+    pattern = split(pattern, ' ', nesting=(0, '([{', '}])'), minimal=True)
+    for i, token in reversed(list(enumerate(pattern))):
+        token = token.replace(' ', '')
+        if not token or token == '[]':  # Blank or null
+            del pattern[i]
+        elif token[0] == '(':  # Optional
+            if i < len(pattern)-1 and pattern[i+1].type == 'WildcardRep':
+                token = token.rstrip('?') if pattern[i+1].greedy else (token+'?')
+            pattern[i] = Optional.make(token, cats)
+            # To-do - reimplement flattening optionals
+        elif token[0] == '[':  # Category
+            pattern[i] = Category.make(token, cats)
+        elif token[0] == '{':  # Numbers - a few types of this
+            token = token[1:-1]
+            if token[0] in '!=<>':  # Comparison - parse to tuple
+                pattern[i] = Comparison.make(token)
+            elif token in ('*', '*?'):  # Wildcard repetition
+                pattern[i] = WildcardRep.make(token)
+            elif token.startswith('u'):  # Escaped character
+                pattern[i] = Grapheme.make(chr(token[1:]))
+            else:  # Repetitions - parse to int
+                pattern[i] = int(token)
+        elif token in ('*', '**', '*?', '**?'):  # Wildcard
+            pattern[i] = Wildcard.make(token)
+        elif token in ('%', '<'):  # Target reference
+            pattern[i] = TargetRef.make(token)
+        elif token == '"':  # Ditto
+            pattern[i] = Ditto.make()
+        elif token == '$':  # Syllable break
+            pattern[i] = SylBreak.make()
+        else:  # Text - parse as word
+            pattern[i:i+1] = [Grapheme(graph) for graph in parse_word(token, graphs)]
+    for i, token in reversed(list(enumerate(pattern))):  # Second pass to evaluate repetitions
+        if isinstance(token, int):
+            pattern[i-1:i+1] = [pattern[i-1]]*token
+    return pattern
+
+def parse_patterns(patterns, cats=None):
+    '''Parses generation patterns.
+
+    Arguments:
+        patterns -- set of patterns to parse (str, list, or dict)
+
+    Returns a list
+    '''
+    if isinstance(patterns, str):
+        patterns = patterns.splitlines()
+    if isinstance(patterns, list):
+        _patterns = []
+        for pattern in patterns:
+            #Remove comments
+            if isinstance(pattern, str):
+                pattern = pattern.split('//')[0]
+            if not pattern:
+                continue
+            if isinstance(pattern, str):
+                _patterns.append(parse_pattern(pattern, cats))
+            else:
+                _patterns.append(pattern)
+    elif isinstance(patterns, dict):
+        _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
+    else:
+        _patterns = None
+    return _patterns
+
 def match_pattern(word, pattern, start, end, step, stack=None):
     '''Match a pattern sequence to the word.
 
@@ -342,97 +434,3 @@ def match_pattern(word, pattern, start, end, step, stack=None):
         return True, pos, catixes, stack
     else:
         return True, pos, catixes
-
-def escape(string):
-    while True:
-        ix = string.find('\\')
-        if ix == -1:
-            break
-        string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
-    return string
-
-def parse_pattern(pattern, cats=None):
-    '''Parse a string using pattern notation.
-
-    Arguments:
-        pattern -- the input string using pattern notation (str or Word)
-        cats    -- a list of cats to use for interpreting categories (list)
-
-    Returns a list
-    '''
-    from .core import Word, Cat, split, parse_word
-    if isinstance(pattern, Word):
-        return [Grapheme(graph) for graph in Word]
-    if cats is None:
-        cats = {}
-    else:
-        cats = cats.copy()
-    if 'graphs' not in cats:
-        cats['graphs'] = Cat("'")
-    for char in '([{}])*?"$%<':
-        pattern = pattern.replace(char, f' {char} ')
-    pattern = pattern.replace('  ?', '?').replace('*  *', '**')
-    pattern = split(pattern, ' ', nesting=(0, '([{', '}])'), minimal=True)
-    for i, token in reversed(list(enumerate(pattern))):
-        token = token.replace(' ', '')
-        if not token or token == '[]':  # Blank or null
-            del pattern[i]
-        elif token[0] == '(':  # Optional
-            if i < len(pattern)-1 and pattern[i+1].type == 'WildcardRep':
-                token = token.rstrip('?') if pattern[i+1].greedy else (token+'?')
-            pattern[i] = Optional(token, cats)
-            # To-do - reimplement flattening optionals
-        elif token[0] == '[':  # Category
-            pattern[i] = Category(token, cats)
-        elif token[0] == '{':  # Numbers - a few types of this
-            token = token[1:-1]
-            if token[0] in '=<>':  # Comparison - parse to tuple
-                pattern[i] = Comparison(token)
-            elif token in ('*', '*?'):  # Wildcard repetition
-                pattern[i] = WildcardRep(token)
-            elif token.startswith('u'):  # Escaped character
-                pattern[i] = Grapheme(chr(token[1:]))
-            else:  # Repetitions - parse to int
-                pattern[i] = int(token)
-        elif token in ('*', '**', '*?', '**?'):  # Wildcard
-            pattern[i] = Wildcard(token)
-        elif token in ('%', '<'):  # Target reference
-            pattern[i] = TargetRef(token)
-        elif token == '"':  # Ditto
-            pattern[i] = Ditto()
-        elif token == '$':  # Syllable break
-            pattern[i] = SylBreak()
-        else:  # Text - parse as word
-            pattern[i:i+1] = [Grapheme(graph) for graph in parse_word(token, cats['graphs'])]
-    for i, token in reversed(list(enumerate(pattern))):  # Second pass to evaluate repetitions
-        if isinstance(token, int):
-            pattern[i-1:i+1] = [pattern[i-1]]*token
-    return pattern
-
-def parse_patterns(patterns, cats=None):
-    '''Parses generation patterns.
-
-    Arguments:
-        patterns -- set of patterns to parse (str, list, or dict)
-
-    Returns a list
-    '''
-    if isinstance(patterns, str):
-        patterns = patterns.splitlines()
-    if isinstance(patterns, list):
-        _patterns = []
-        for pattern in patterns:
-            #Remove comments
-            if isinstance(pattern, str):
-                pattern = pattern.split('//')[0]
-            if not pattern:
-                continue
-            if isinstance(pattern, str):
-                _patterns.append(parse_pattern(pattern, cats))
-            else:
-                _patterns.append(pattern)
-    elif isinstance(patterns, dict):
-        _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
-    else:
-        _patterns = None
-    return _patterns
