@@ -542,19 +542,19 @@ def parse_envs(envs, cats=None):
     Returns a list
     '''
     _envs = []
-    for env in split(envs, '|', minimal=True):
+    for env in split(envs, ',', minimal=True):
         _env = env  # Record the original for error messages
-        env = env.strip('@,')
+        env = env.strip('@|')
         if '&' in env:
-            env = tuple(parse_envs(env.replace('&','|'), cats))
-        elif '~' in env:  # A~B is equivalent to AB|BA - ~B is equivalent to _~B
+            env = tuple(parse_envs(env.replace('&',','), cats))
+        elif '~' in env:  # A~B is equivalent to AB,BA - ~B is equivalent to _~B
             if env == '~':
                 env = []
             else:
                 env = env.split('~')
                 env[0] = env[0] or '_'
                 env[-1] = env[-1] or '_'
-                _envs.extend(parse_envs('{}|{}'.format(''.join(env), ''.join(reversed(env))), cats))
+                _envs.extend(parse_envs('{},{}'.format(''.join(env), ''.join(reversed(env))), cats))
                 continue
         elif '_' in env:  # Local environment
             if env.count('_') > 1:
@@ -566,9 +566,9 @@ def parse_envs(envs, cats=None):
                 raise FormatError(f'indexed global environments must have exactly one `@`: {_env}')
             env, indices = env.split('@')
             try:
-                indices = tuple(int(index)-(1 if int(index) < 0 else 0) for index in split(indices, ',', minimal=True))
+                indices = tuple(int(index)-(1 if int(index) < 0 else 0) for index in split(indices, '|', minimal=True))
             except ValueError:
-                raise FormatError(f'indices must be a comma-separated list of numbers: {_env}')
+                raise FormatError(f'indices must be a pipe-separated list of numbers: {_env}')
             env = [(parse_pattern(env, cats), indices)]
         else:  # Global environment
             env = [parse_pattern(env, cats)]
