@@ -392,10 +392,10 @@ def validate_arg(rule):
 regexCat = re.compile(r'\[(?!\])')
 
 regexes = (
-    re.compile(r'\s+(>\s+[/!]\s+)'),  # Used to delete whitespace before > / or > !
-    re.compile(r'(?:^|\s+)(>\^\??|[>/!|&@])(?:\s+|$)'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
-    re.compile(r'^([+-])\s+'),  # Used to delete whitespace after either of initial +-
-    re.compile(r'([:;,^])\s+'),  # Used to delete whitespace after any of :;,^
+    re.compile(r' (> [/!] )'),  # Used to delete whitespace before > / or > !
+    re.compile(r'(?:^| )(>\^\??|[>/!|&@])(?: |$)'),  # Used to delete whitespace around >^ , >^? , or any of >/!|&@
+    re.compile(r'^([+-]) '),  # Used to delete whitespace after either of initial +-
+    re.compile(r'([:;,^]) '),  # Used to delete whitespace after any of :;,^
     re.compile(r'(?<!{)([>/!])')  # Used to insert whitespace before field markers
 )
 
