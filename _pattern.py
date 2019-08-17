@@ -1,22 +1,24 @@
 '''Pattern parsing and matching
 
 Classes:
-    Token       -- Base class for pattern tokens
-    Grapheme    -- Token matching a specific grapheme
-    Ditto       -- Token matching the second of two identical segments
-    SylBreak    -- Token matching a syllable boundary
-    Category    -- Token matching a category of graphemes
-    Wildcard    -- Token matching one or more arbitrary segments
-    WildcardRep -- Token matching one or more copies of the previous token
-    Optional    -- Token matching an optional sequence of tokens
-    Comparison  -- Token used for indicating the number of another token
-    TargetRef   -- Token used to refer to the target
+    Token       -- Class utilised by the tokeniser
+    Element     -- Base class for pattern elements
+    Grapheme    -- Element matching a specific grapheme
+    Ditto       -- Element matching the second of two identical segments
+    SylBreak    -- Element matching a syllable boundary
+    Category    -- Element matching a category of graphemes
+    Wildcard    -- Element matching one or more arbitrary segments
+    WildcardRep -- Element matching one or more copies of the previous element
+    Optional    -- Element matching an optional sequence of elements
+    Comparison  -- Element used for indicating the number of another element
+    TargetRef   -- Element used to refer to the target
 
 Functions:
     escape         -- processes escaped characters in a string
-    match_pattern  -- matches a list of tokens to a specified slice of a word
-    parse_pattern  -- parses a string utilising pattern notation into a list of tokens
+    tokenise       -- returns a generator producing tokens
+    parse_pattern  -- parses a string utilising pattern notation into a list of elements
     parse_patterns -- parses a collection of strings using pattern notation
+    match_pattern  -- matches a list of elements to a specified slice of a word
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
@@ -35,8 +37,14 @@ from dataclasses import dataclass, InitVar
 from typing import Dict, List
 from .core import FormatError
 
-@dataclass(repr=False, eq=False)
+## Classes
+@dataclass
 class Token:
+    type: str
+    value: str
+
+@dataclass(repr=False, eq=False)
+class Element:
     def __str__(self):
         return ''
 
@@ -64,9 +72,9 @@ class Token:
         # matched, length, ilength, stack, catixes
         return False, 0, 0, [], []
 
-## Matching tokens ##
+## Matching elements ##
 @dataclass(repr=False, eq=False)
-class Grapheme(Token):
+class Grapheme(Element):
     grapheme: str
 
     def __str__(self):
@@ -80,7 +88,7 @@ class Grapheme(Token):
         return self.grapheme == word[pos], step, istep, [], []
 
 @dataclass(repr=False, eq=False)
-class Ditto(Token):
+class Ditto(Segment):
     def __str__(self):
         return '"'
 
@@ -88,7 +96,7 @@ class Ditto(Token):
         return word[pos] == word[pos-1], step, istep, [], []
 
 @dataclass(repr=False, eq=False)
-class SylBreak(Token):
+class SylBreak(Element):
     def __str__(self):
         return '$'
 
@@ -96,7 +104,7 @@ class SylBreak(Token):
         return (pos in word.syllables), 0, istep, [], []
 
 @dataclass(repr=False, eq=False)
-class Category(Token):
+class Category(Element):
     cat: Cat
 
     def __str__(self):
@@ -133,7 +141,7 @@ class Category(Token):
         return False, 0, 0, [], []
 
 @dataclass(repr=False, eq=False)
-class Wildcard(Token):
+class Wildcard(Element):
     greedy: bool
     extended: bool
 
@@ -160,7 +168,7 @@ class Wildcard(Token):
         return False, 0, 0, [], []
 
 @dataclass(repr=False, eq=False)
-class WildcardRep(Token):
+class WildcardRep(Element):
     greedy: bool
 
     def __str__(self):
@@ -180,9 +188,9 @@ class WildcardRep(Token):
             istep *= -1
         return True, 0, istep, [(pos, ix-istep)], []
 
-## Non-matching tokens ##
+## Non-matching elements ##
 @dataclass(repr=False, eq=False)
-class Optional(Token):
+class Optional(Element):
     greedy: bool
     pattern: List[Token]
 
@@ -201,7 +209,7 @@ class Optional(Token):
     # Somehow I need to adapt the special matching code for this framework - won't be easy
 
 @dataclass(repr=False, eq=False)
-class Comparison(Token):
+class Comparison(Element):
     operation: str
     value: int
 
@@ -224,7 +232,7 @@ class Comparison(Token):
         raise FormatError(f'{string!r} does not have a valid operation')
 
 @dataclass(repr=False, eq=False)
-class TargetRef(Token):
+class TargetRef(Element):
     direction: int
 
     def __str__(self):
