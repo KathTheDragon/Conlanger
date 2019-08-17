@@ -220,6 +220,7 @@ class Comparison(Element):
     def make(string, cats=None):
         if not string.startswith('{') or not string.endswith('}'):
             raise FormatError(f'{string!r} is an invalid comparison')
+        string = string[1:-1]
         for op in ('==', '=', '!=', '>=', '>', '<=', '<'):
             if string.startswith(op):
                 try:
