@@ -270,7 +270,7 @@ def parse_pattern(pattern, cats=None):
 
     Returns a list
     '''
-    from .core import Word, Cat, split, parse_word
+    from .core import Word, split, parse_word
     if isinstance(pattern, Word):
         return [Grapheme(graph) for graph in Word]
     if cats is not None and 'graphs' in cats:
