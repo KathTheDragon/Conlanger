@@ -93,6 +93,15 @@ class Element:
     def make(cls, string=None, cats=None):
         return cls()
 
+    @classmethod
+    def fromTokens(cls, tokens=None, cats=None):
+        if len(tokens) != 1:
+            raise FormatError(f'too many tokens: {tokens}')
+        if tokens[0].type == cls.__name__.upper():
+            return cls()
+        raise FormatError(f'invalid token: {tokens[0].value} @ {tokens[0].column}')
+
+
     # This method must guarantee that the last two return values are [] if the first is False
     def match(self, word, pos, ix, step, istep):
         # matched, length, ilength, stack, catixes
@@ -109,6 +118,15 @@ class Grapheme(Element):
     @staticmethod
     def make(string, cats=None):
         return Grapheme(grapheme=string)
+
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        if len(tokens) != 1:
+            raise FormatError(f'too many tokens: {tokens}')
+        type, value = tokens[0]
+        if type == 'ESCAPE':
+            return Grapheme(grapheme=chr(int(value[2:-1])))
+        raise FormatError(f'invalid token: {value} @ {tokens[0].column}')
 
     def match(self, word, pos, ix, step, istep):
         return self.grapheme == word[pos], step, istep, [], []
@@ -159,6 +177,19 @@ class Category(Element):
         else:
             raise FormatError(f'{string!r} is not a defined category')
 
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        from .core import Cat
+        if tokens[0].type != 'LCAT' or tokens[-1].type != 'RCAT':
+            raise FormatError(f'the given tokens are not a valid category: {tokens}')
+        cat = ''.join(token.value for token in tokens[1:-1])
+        if ',' in cat:  # Nonce cat
+            return Category(cat=Cat(cat, cats))
+        elif cats is not None and cat in cats:
+            return Category(cat=cats[cat])
+        else:
+            raise FormatError(f'{cat!r} is not a defined category')
+
     def match(self, word, pos, ix, step, istep):
         if word[pos] in self.cat:  # This might change
             return True, step, istep, [], [self.cat.index(word[pos])]
@@ -180,6 +211,18 @@ class Wildcard(Element):
             return Wildcard(greedy=greedy, extended=extended)
         else:
             raise FormatError(f'{string!r} is an invalid wildcard')
+
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        if len(tokens) != 1:
+            raise FormatError(f'too many tokens: {tokens}')
+        type, value = tokens[0]
+        if type == 'WILDCARD':
+            if value in ('*', '**', '*?', '**?'):
+                greedy = not value.endswith('?')
+                extended = value.startswith('**')
+                return Wildcard(greedy=greedy, extended=extended)
+        raise FormatError(f'invalid token: {value} @ {tokens[0].column}')
 
     def match(self, word, pos, ix, step, istep):
         if self.extended or word[pos] != '#':
@@ -207,6 +250,18 @@ class WildcardRep(Element):
         else:
             raise FormatError(f'{string!r} is an invalid wildcard repetition')
 
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        if len(tokens) != 1:
+            raise FormatError(f'too many tokens: {tokens}')
+        type, value = tokens[0]
+        if type == 'WILDCARDREP':
+            if value == '{*}':
+                return WildcardRep(greedy=True)
+            elif value == '{*?}':
+                return WildcardRep(greedy=False)
+        raise FormatError(f'invalid wildcard repetition: {value} @ {tokens[0].column}')
+
     def match(self, word, pos, ix, step, istep):
         if not self.greedy:
             istep *= -1
@@ -226,6 +281,16 @@ class Optional(Element):
     def make(string, cats=None):
         greedy = not string.endswith('?')
         pattern = parse_pattern(string.rstrip('?')[1:-1], cats)
+        if len(pattern) == 1 and isinstance(pattern[0], Wildcard):
+            pattern[0].greedy = greedy
+        return Optional(greedy=greedy, pattern=pattern)
+
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        if tokens[0].type != 'LOPT' or tokens[-1].type != 'ROPT':
+            raise FormatError(f'the given tokens are not a valid category: {tokens}')
+        greedy = not tokens[-1].value.endswith('?')
+        pattern = compile_tokens(tokens[1:-1], cats)
         if len(pattern) == 1 and isinstance(pattern[0], Wildcard):
             pattern[0].greedy = greedy
         return Optional(greedy=greedy, pattern=pattern)
@@ -256,6 +321,26 @@ class Comparison(Element):
                 return Comparison(operation=op, value=value)
         raise FormatError(f'{string!r} does not have a valid operation')
 
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        if len(tokens) != 1:
+            raise FormatError(f'too many tokens: {tokens}')
+        type, value = tokens[0]
+        if type == 'COMPARISON':
+            if not value.startswith('{') or not value.endswith('}'):
+                raise FormatError(f'{value!r} is an invalid comparison')
+            comparison = value[1:-1]
+            for op in ('==', '=', '!=', '>=', '>', '<=', '<'):
+                if comparison.startswith(op):
+                    try:
+                        num = int(comparison[len(op):])
+                    except ValueError:
+                        raise FormatError(f'{value!r} has an invalid value')
+                    if op == '=':
+                        op = '=='
+                    return Comparison(operation=op, value=num)
+        raise FormatError(f'invalid token: {value} @ {tokens[0].column}')
+
 @dataclass(repr=False, eq=False)
 class TargetRef(Element):
     direction: int
@@ -271,6 +356,18 @@ class TargetRef(Element):
             return TargetRef(direction=-1)
         else:
             raise FormatError(f'{string!r} is not a target reference')
+
+    @staticmethod
+    def fromTokens(tokens, cats=None):
+        if len(tokens) != 1:
+            raise FormatError(f'too many tokens: {tokens}')
+        type, value = tokens[0]
+        if type == 'TARGETREF':
+            if value == '%':
+                return TargetRef(direction=1)
+            elif value == '<':
+                return TargetRef(direction=-1)
+        raise FormatError(f'invalid token: {value} @ {tokens[0].column}')
 
     def resolve_target(self, target):
         return [Grapheme(graph) for graph in (target if self.direction == 1 else reversed(target))]
