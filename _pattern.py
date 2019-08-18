@@ -440,6 +440,22 @@ def tokenise(string, colstart=None):
                 raise FormatError(f'unexpected character: {value} @ {column}')
         yield Token(type, value, column)
 
+def match_brackets(tokens, start=0):
+    if tokens[start].type not in ('LOPT', 'LCAT'):
+        raise FormatError(f'expected bracket: {tokens[start].value} @ {tokens[start].column}')
+    else:
+        left = tokens[start].type
+        right = left.replace('L', 'R')
+    depth = 0
+    for i, token in enumerate(tokens[start:], start+1):
+        if token.type == left:
+            depth += 1
+        elif token.type == right:
+            depth -= 1
+            if depth == 0:
+                return i
+    raise FormatError(f'unmatched bracket: {tokens[start].value} @ {tokens[start].column}')
+
 def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
 
