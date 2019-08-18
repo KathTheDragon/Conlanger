@@ -456,6 +456,35 @@ def match_brackets(tokens, start=0):
                 return i
     raise FormatError(f'unmatched bracket: {tokens[start].value} @ {tokens[start].column}')
 
+def compile_tokens(tokens, cats=None):
+    from .core import parse_word
+    tokens = list(tokens)
+    if not tokens:
+        return None
+    if cats is not None and 'graphs' in cats:
+        graphs = cats['graphs']
+    else:
+        graphs = Cat("'")
+    elements = []
+    i = 0
+    while i < len(tokens):
+        type, value = tokens[i]
+        if type in ('LOPT', 'LCAT'):
+            j = match_brackets(tokens, i)
+        else:
+            j = i+1
+        if type == 'NULL':
+            pass
+        elif type == 'REPETITION':
+            elements[-1:] = elements[-1:]*int(value[1:-1])
+        elif type == 'TEXT':
+            elements.extend([Grapheme(graph) for graph in parse_word(value, graphs)])
+        elif type in ELEMENT_DICT:
+            cls = ELEMENT_DICT[type]
+            elements.append(cls.fromTokens(tokens[i:j], cats))
+        i = j
+    return elements
+
 def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
 
