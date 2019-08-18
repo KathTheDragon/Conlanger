@@ -372,6 +372,18 @@ class TargetRef(Element):
     def resolve_target(self, target):
         return [Grapheme(graph) for graph in (target if self.direction == 1 else reversed(target))]
 
+ELEMENT_DICT = {
+    'LOPT': Optional,
+    'LCAT': Category,
+    'WILDCARDREP': WildcardRep,
+    'COMPARISON': Comparison,
+    'ESCAPE': Grapheme,
+    'WILDCARD': Wildcard,
+    'TARGETREF': TargetRef,
+    'DITTO': Ditto,
+    'SYLBREAK': SylBreak,
+}
+
 def escape(string):
     while True:
         ix = string.find('\\')
