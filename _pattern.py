@@ -126,15 +126,13 @@ class Category(Element):
     @staticmethod
     def make(string, cats=None):
         from .core import Cat
-        if cats is None:
-            cats = {}
         if string.startswith('[') and string.endswith(']'):
             cat = string[1:-1]
         else:
             raise FormatError(f'{string!r} is not a valid category')
         if ',' in cat:  # Nonce cat
             return Category(cat=Cat(cat, cats))
-        elif cat in cats:
+        elif cats is not None and cat in cats:
             return Category(cat=cats[cat])
         else:
             raise FormatError(f'{string!r} is not a defined category')
