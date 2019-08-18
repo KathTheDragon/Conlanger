@@ -266,7 +266,7 @@ def parse_pattern(pattern, cats=None):
 
     Arguments:
         pattern -- the input string using pattern notation (str or Word)
-        cats    -- a list of cats to use for interpreting categories (list)
+        cats    -- a dictionary of categories to use for interpreting categories (dict)
 
     Returns a list
     '''
