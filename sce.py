@@ -43,6 +43,7 @@ import logging.config
 import os.path
 import re
 from collections import namedtuple
+from dataclasses import dataclass, InitVar
 from math import ceil
 from random import randint
 from .core import LangException, FormatError, RuleError, Cat, Word, parse_cats, split
@@ -64,7 +65,18 @@ class WordUnchanged(LangException):
     '''Used to indicate that the word was not changed by the rule.'''
 
 # == Classes == #
-class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
+@dataclass
+class Flags:
+    ignore: int = 0
+    ditto: int = 0
+    stop: int = 0
+    rtl: int = 0
+    repeat: int = 1
+    persist: int = 1
+    chance: int = 100
+
+@dataclass
+class Rule:
     '''Class for representing a sound change rule.
 
     Instance variables:
@@ -74,14 +86,19 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
         envs      -- application environments (list)
         excs      -- exception environments (list)
         otherwise -- the rule to apply if an exception is satisfied (Rule)
-        flags     -- flags for altering execution (dict)
+        flags     -- flags for altering execution (Flags)
 
     Methods:
         apply       -- apply the rule to a word
         check_match -- check if the match is valid
     '''
-
-    __slots__ = ()
+    rule: str
+    tars: list
+    reps: list
+    envs: list
+    excs: list
+    otherwise: 'Rule'
+    flags: Flags
 
     def __repr__(self):
         return f"Rule('{self!s}')"
@@ -91,6 +108,9 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
 
     def __eq__(self, other):
         return self[1:] == other[1:]
+
+    def __iter__(self):
+        return iter((self.rule, self.tars, self.reps, self.envs, self.excs, self.otherwise, self.flags))
 
     def apply(self, word):
         '''Apply the sound change rule to a single word.
@@ -205,17 +225,17 @@ class Rule(namedtuple('Rule', 'rule tars reps envs excs otherwise flags')):
             logger.debug('>> No "else" rule, check failed')
         return 0
 
+@dataclass
 class RuleBlock(list):
     '''Groups a block of sound changes together.
 
     Instance variables:
-        flags -- flags for altering execution (namedtuple)
+        flags -- flags for altering execution (Flags)
     '''
+    ruleset: InitVar[list]
+    flags: Flags = Flags()
 
-    __slots__ = ('flags',)
-
-    def __init__(self, ruleset, flags=None):
-        self.flags = flags
+    def __post_init__(self, ruleset):
         list.__init__(self, ruleset)
 
     def apply(self, word):
@@ -256,8 +276,6 @@ class RuleBlock(list):
                     del rules[i]
                     del values[i]
         return word
-
-Flags = namedtuple('Flags', 'ignore, ditto, stop, rtl, repeat, persist, chance')
 
 # == Functions == #
 def parse_wordset(wordset, cats=None, syllabifier=None):
