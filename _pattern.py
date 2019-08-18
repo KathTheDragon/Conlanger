@@ -35,7 +35,7 @@ Handling of optionals needs a lot of work
 '''
 from dataclasses import dataclass, InitVar
 from typing import Dict, List
-from .core import FormatError
+from .core import Cat, FormatError
 
 ## Classes
 @dataclass
