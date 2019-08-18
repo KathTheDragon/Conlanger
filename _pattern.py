@@ -42,6 +42,10 @@ from .core import FormatError
 class Token:
     type: str
     value: str
+    column: int
+
+    def __iter__(self):
+        return iter((self.type, self.value))
 
 @dataclass(repr=False, eq=False)
 class Element:
