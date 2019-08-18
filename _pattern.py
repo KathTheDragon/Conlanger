@@ -92,7 +92,7 @@ class Grapheme(Element):
         return self.grapheme == word[pos], step, istep, [], []
 
 @dataclass(repr=False, eq=False)
-class Ditto(Segment):
+class Ditto(Element):
     def __str__(self):
         return '"'
 
