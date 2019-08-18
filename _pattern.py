@@ -283,6 +283,54 @@ def escape(string):
         string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
     return string
 
+def tokenise(string, colstart=None):
+    '''Tokenise a string using pattern notation.
+
+    Arguments:
+        string   -- the input string using pattern notation (str)
+        colstart -- the column to start token indexing at (int)
+
+    Yields Token objects
+    '''
+    if colstart is None:
+        nested = False
+        colstart = 0
+    else:
+        nested = True
+    if not string:
+        if nested:
+            yield Token('END', '', colstart)
+        return
+    brackets = []
+    for match in TOKEN_REGEX.finditer(string):
+        type = match.lastgroup
+        value = match.group()
+        column = match.start() + colstart
+        if type == 'COMMA':
+            if not (brackets and brackets[-1] == '['):  # Commas are only licensed inside categories
+                if nested:
+                    yield Token('END', value, column)
+                    return
+                else:
+                    raise FormatError(f'unexpected character: {value} @ {column}')
+        elif type in ('LOPT', 'LCAT'):  # Left brackets
+            if value == '(' and brackets and brackets[-1] == '[':
+                raise FormatError(f'optionals may not appear inside categories: {value} @ {column}')
+            brackets.append(value)
+        elif type in ('ROPT', 'RCAT'):  # Right brackets
+            if not brackets:
+                raise FormatError(f'unexpected bracket: {value} @ {column}')
+            bracket = brackets.pop()
+            if bracket+value[0] not in ('()', '[]'):
+                raise FormatError(f'mismatched brackets: {value} @ {column}')
+        elif type == 'UNKNOWN':
+            if nested:
+                yield Token('END', value, column)
+                return
+            else:
+                raise FormatError(f'unexpected character: {value} @ {column}')
+        yield Token(type, value, column)
+
 def parse_pattern(pattern, cats=None):
     '''Parse a string using pattern notation.
 
