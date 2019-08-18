@@ -34,7 +34,6 @@ Go over docstrings
 
 from collections import namedtuple
 from string import whitespace
-from ._pattern import match_pattern, parse_pattern, parse_patterns, escape
 
 # == Exceptions == #
 class LangException(Exception):
@@ -248,6 +247,7 @@ class Word(list):
 
         Returns an int
         '''
+        from ._pattern import parse_pattern
         start, end = slice_indices(self, start, end)
         if isinstance(sub, Word):
             sub = parse_pattern(sub)
@@ -279,6 +279,7 @@ class Word(list):
 
         Returns a tuple.
         '''
+        from ._pattern import match_pattern
         start, end = slice_indices(self, start, end)
         return match_pattern(self, pattern, start, end, step)
 
@@ -367,6 +368,7 @@ class Syllabifier:
     slots = ('rules',)
 
     def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
+        from ._pattern import parse_patterns
         onsets = parse_patterns(onsets)
         nuclei = parse_patterns(nuclei)
         codas = parse_patterns(codas)

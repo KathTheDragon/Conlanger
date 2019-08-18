@@ -45,7 +45,8 @@ import re
 from collections import namedtuple
 from math import ceil
 from random import randint
-from .core import LangException, FormatError, RuleError, Cat, Word, parse_pattern, parse_cats, split, escape
+from .core import LangException, FormatError, RuleError, Cat, Word, parse_cats, split
+from ._pattern import parse_pattern, escape
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
