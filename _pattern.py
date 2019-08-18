@@ -33,9 +33,31 @@ Handling of optionals needs a lot of work
 
 === Style ===
 '''
+import re
 from dataclasses import dataclass, InitVar
 from typing import Dict, List
 from .core import Cat, FormatError
+
+## Constants
+TOKENS = {
+    'COMMA': r', ?',
+    'NULL': r'\[\]',
+    'LOPT': r'\(',
+    'ROPT': r'\)\??',
+    'LCAT': r'\[',
+    'RCAT': r'\]',
+    'WILDCARDREP': r'\{\*\??\}',
+    'COMPARISON': r'\{(?:!=|[=<>]=?)\d+\}',
+    'ESCAPE': r'\{u\d+\}',
+    'REPETITION': r'\{\d+\}',
+    'WILDCARD': r'\*\*?\??',
+    'TARGETREF': r'%|<',
+    'DITTO': r'\"',
+    'SYLBREAK': r'\$',
+    'TEXT': r'[\w#~]+',
+    'UNKNOWN': r'.',
+}
+TOKEN_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in TOKENS.items()))
 
 ## Classes
 @dataclass
