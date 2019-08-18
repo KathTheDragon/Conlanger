@@ -482,6 +482,8 @@ def compile_tokens(tokens, cats=None):
         elif type in ELEMENT_DICT:
             cls = ELEMENT_DICT[type]
             elements.append(cls.fromTokens(tokens[i:j], cats))
+        else:
+            raise FormatError(f'unexpected token: {value} @ {tokens[i].column}')
         i = j
     return elements
 
