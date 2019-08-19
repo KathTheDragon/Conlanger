@@ -318,7 +318,7 @@ def escape(string):
         string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
     return string
 
-def tokenise(string, colstart=None):
+def tokenise(string, colstart=None, linenum=0):
     '''Tokenise a string using pattern notation.
 
     Arguments:
@@ -344,7 +344,7 @@ def tokenise(string, colstart=None):
         if type == 'COMMA':
             if not (brackets and brackets[-1] == '['):  # Commas are only licensed inside categories
                 if nested:
-                    yield Token('END', value, column)
+                    yield Token('END', value, linenum, column)
                     return
                 else:
                     raise FormatError(f'unexpected character: {value} @ {column}')
@@ -360,11 +360,11 @@ def tokenise(string, colstart=None):
                 raise FormatError(f'mismatched brackets: {value} @ {column}')
         elif type == 'UNKNOWN':
             if nested:
-                yield Token('END', value, column)
+                yield Token('END', value, linenum, column)
                 return
             else:
                 raise FormatError(f'unexpected character: {value} @ {column}')
-        yield Token(type, value, column)
+        yield Token(type, value, linenum, column)
 
 def match_brackets(tokens, start=0):
     if tokens[start].type not in ('LOPT', 'LCAT'):
