@@ -85,7 +85,7 @@ class Cat(list):
 
     __slots__ = ('name',)
 
-    def __init__(self, values=None, cats=None, name=None):
+    def __init__(self, values=None, name=None):
         '''Constructor for Cat.
 
         Arguments:
@@ -93,32 +93,11 @@ class Cat(list):
             cats   -- dictionary of categories (dict)
             name   -- optional name for the category
         '''
+        list.__init__(self, values)
         self.name = name
-        _values = []
-        if values is None:
-            values = []
-        elif isinstance(values, str):  # We want an iterable with each value as an element
-            values = split(values, ',', minimal=True)
-        for value in values:
-            value = value.strip()
-            if isinstance(value, Cat):  # Another category
-                _values.extend(value)
-            elif value[0] == '[':
-                value = value.strip('[]')
-                if cats is not None and value in cats:
-                    _values.extend(cats[value])
-                else:
-                    continue
-            else:
-                _values.append(value)
-        list.__init__(self, _values)
 
     def __repr__(self):
-        s = str(self)
-        if "'" not in s:
-            return f"Cat('{s}')"
-        else:
-            return f'Cat("{s}")'
+        return f'Cat({str(self)!r})'
 
     def __str__(self):
         return ', '.join(self)
@@ -137,6 +116,31 @@ class Cat(list):
 
     def __le__(self, cat):
         return all(value in cat for value in self)
+
+    @staticmethod
+    def make(string, cats=None, name=None):
+        if not (string.startswith('[') and string.endswith(']')):
+            raise FormatError(f'invalid category: {string}')
+        cat = string[1:-1]
+        if ',' in cat:  # Nonce category
+            if cat.endswith(','):
+                cat = cat[:-1]
+            values = []
+            for value in re.split(r', ?', cat):
+                if not value:
+                    raise FormatError(f'invalid category values: {cat}')
+                elif value.startswith('[') and value.endswith(']'):
+                    values.extend(Cat.make(value))
+                else:
+                    if ' ' in value or '[' in value or ']' in value:
+                        raise FormatError(f'invalid category value: {value}')
+                    values.append(value)
+            return Cat(values, name)
+        else:  # Named category
+            if cats is not None and cat in cats:
+                return cats[cat]
+            else:
+                raise FormatError(f'invalid category name: {cat}')
 
 class Word(list):
     '''Represents a word as a list of graphemes.
@@ -164,7 +168,7 @@ class Word(list):
             graphs    -- category of graphemes (Cat)
         '''
         if graphs is None:
-            graphs = Cat("'")
+            graphs = Cat(["'"])
         self.graphs = graphs
         if lexeme is None:
             lexeme = []
@@ -549,7 +553,8 @@ def parse_cats(cats, initial_cats=None):
                 name, values = cat.split(op)
                 name, values = name.strip(), values.strip()
                 if name != '' and values != '':
-                    exec(f'_cats[name] {op} Cat(values, _cats, name)')
+                    cat = Cat.make(f'[{values}]', _cats, name)
+                    exec(f'_cats[name] {op} cat')
                     if not _cats[name]:
                         del _cats[name]
     elif isinstance(cats, dict):
@@ -559,7 +564,7 @@ def parse_cats(cats, initial_cats=None):
             elif isinstance(cats[cat], Cat):
                 _cats[cat] = cats[cat]
             else:
-                _cats[cat] = Cat(cats[cat], _cats, cat)  # meow
+                _cats[cat] = Cat.make(cats[cat], _cats, cat)  # meow
     for cat in list(_cats):  # Discard blank categories
         if not _cats[cat]:
             del _cats[cat]

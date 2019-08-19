@@ -292,7 +292,7 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
     if cats is not None and 'graphs' in cats:
         graphs = cats['graphs']
     else:
-        graphs = Cat("'")
+        graphs = Cat(["'"])
     _wordset = []
     for word in wordset:
         if isinstance(word, Word):
@@ -667,7 +667,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
         else:
             rule = ruleset[0]
         if isinstance(rule, str) and '>' not in rule and '=' in rule and rule.startswith('graphs'):
-            cats['graphs'] = Cat(rule.split('=')[1].strip(), cats)
+            cats['graphs'] = Cat.make(rule.split('=')[1].strip(), cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
     ruleset = compile_ruleset(ruleset, cats)
     for line in wordset:
