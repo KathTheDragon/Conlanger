@@ -32,6 +32,9 @@ Consider where to raise/handle exceptions
 Go over docstrings
 '''
 
+import re
+from dataclasses import dataclass, field
+
 # == Exceptions == #
 class LangException(Exception):
     '''Base class for exceptions in this package'''
@@ -77,30 +80,29 @@ class Token:
     def __iter__(self):
         return iter((self.type, self.value))
 
-class Cat(list):
+@dataclass
+class Cat:
     '''Represents a category of graphemes.'''
-
-    __slots__ = ('name',)
-
-    def __init__(self, values=None, name=None):
-        '''Constructor for Cat.
-
-        Arguments:
-            values -- the values in the category (str, list)
-            cats   -- dictionary of categories (dict)
-            name   -- optional name for the category
-        '''
-        list.__init__(self, values)
-        self.name = name
-
-    def __repr__(self):
-        return f'Cat({str(self)!r})'
+    values: list
+    name: str = field(default=None, compare=False)
 
     def __str__(self):
         return ', '.join(self)
 
+    def __len__(self):
+        return len(self.values)
+
+    def __getitem__(self, key):
+        return self.values[key]
+
+    def __iter__(self):
+        return iter(self.values)
+
+    def __contains__(self, item):
+        return item in self.values
+
     def __and__(self, cat):
-        return Cat(value for value in self if value in cat)
+        return Cat([value for value in self if value in cat])
 
     def __add__(self, cat):
         return Cat(list.__add__(self, cat))
@@ -109,10 +111,13 @@ class Cat(list):
         return NotImplemented
 
     def __sub__(self, cat):
-        return Cat(value for value in self if value not in cat)
+        return Cat([value for value in self if value not in cat])
 
     def __le__(self, cat):
         return all(value in cat for value in self)
+
+    def __lt__(self, cat):
+        return self <= cat and self != cat
 
     @staticmethod
     def make(string, cats=None, name=None):
@@ -139,7 +144,8 @@ class Cat(list):
             else:
                 raise FormatError(f'invalid category name: {cat}')
 
-class Word(list):
+@dataclass
+class Word:
     '''Represents a word as a list of graphemes.
 
     Instance variables:
@@ -153,50 +159,43 @@ class Word(list):
         apply_match   -- apply a single match to the word
         strip         -- remove leading and trailing graphemes
     '''
+    phones: list = field(init=False)
+    lexeme: InitVar[] = field(default_factory=list)
+    graphs: Cat = None
+    syllabifier: 'Syllabifier' = None
 
-    __slots__ = ('graphs', 'syllabifier', '_syllables')
-
-    def __init__(self, lexeme=None, graphs=None, syllabifier=None):
-        '''Constructor for Word
-
-        Arguments:
-            lexeme    -- the word (str)
-            syllables -- list of tuples representing syllables (list)
-            graphs    -- category of graphemes (Cat)
-        '''
-        if graphs is None:
-            graphs = Cat(["'"])
-        self.graphs = graphs
-        if lexeme is None:
-            lexeme = []
-        elif isinstance(lexeme, str):
-            lexeme = parse_word(f' {lexeme} ', self.graphs)
+    def __post_init__(self, lexeme):
+        if isinstance(lexeme, str):
+            self.phones = parse_word(f' {lexeme} ', graphs)
         else:
-            for i in reversed(range(1, len(lexeme))):
-                if not isinstance(lexeme[i], str):  # Make sure we only get strings
-                    raise ValueError('Iterable values must be strings.')
-                if lexeme[i-1] == lexeme[i] == '#':  # Make sure we don't have multiple adjacent '#'s
-                    del lexeme[i]
-        list.__init__(self, lexeme)
-        self.syllabifier = syllabifier
-        self._syllables = None
+            phones = []
+            for i, phone in enumerate(lexeme):
+                if not phone:
+                    continue
+                elif not (phone == '#' and phones and phones[-1] == '#'):
+                    phones.append(phone)
 
-    @property
+    @memoisedproperty
     def syllables(self):
-        if self._syllables is None and self.syllabifier is not None:
-            self._syllables = self.syllabifier(self)
-        return self._syllables
+        return self.syllabifier(self)
 
     def __repr__(self):
-        word = str(self)
-        if "'" in word:
-            return f'Word("{word}")'
-        else:
-            return f"Word('{word}')"
+        return f'Word({str(self)!r})'
 
     def __str__(self):
-        word = unparse_word(self, self.graphs)
-        return word.strip(self.graphs[0]+'#').replace('#', ' ')
+        return unparse_word(self, self.graphs)
+
+    def __len__(self):
+        return len(self.phones)
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            return Word(list.__getitem__(self, item), self.graphs, self.syllabifier)
+        else:
+            return list.__getitem__(self, item)
+
+    def __iter__(self):
+        return iter(self.phones)
 
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
@@ -206,45 +205,29 @@ class Word(list):
         else:
             return list.__contains__(self, item)
 
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            return Word(list.__getitem__(self, item), self.graphs, self.syllabifier)
-        else:
-            return list.__getitem__(self, item)
-
-    __setitem__ = None
-    __delitem__ = None
-
     def __add__(self, other):
         graphs = self.graphs
         if isinstance(other, Word):
-            graphs += other.graphs[1:]
-            other = list(other)
+            if graphs is None:
+                graphs = other.graphs
+            elif other.graphs is not None:
+                graphs += other.graphs[1:]
+            other = other.phones
         elif isinstance(other, str):
             other = parse_word(other, graphs)
-        return Word(list(self) + other, graphs, self.syllabifier)
+        return Word(self.phones + other, graphs, self.syllabifier)
 
     def __mul__(self, other):
-        return Word(list(self) * other, self.graphs, self.syllabifier)
+        return Word(self.phones * other, self.graphs, self.syllabifier)
 
     def __rmul__(self, other):
-        return Word(list(self) * other, self.graphs, self.syllabifier)
+        return Word(self.phones * other, self.graphs, self.syllabifier)
 
     def __iadd__(*args):
         return NotImplemented
 
     def __imul__(*args):
         return NotImplemented
-
-    append = None
-    clear = None
-    copy = None
-    extend = None
-    insert = None
-    pop = None
-    remove = None
-    reverse = None
-    sort = None
 
     def strip(self, chars=None):
         if chars is None:
@@ -385,8 +368,9 @@ class Word(list):
                 word = word[:match] + tar + word[match:]
         return word
 
+@dataclass
 class Syllabifier:
-    slots = ('rules',)
+    rules: list
 
     def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
         from ._pattern import parse_patterns
@@ -555,17 +539,21 @@ def parse_cats(cats, initial_cats=None):
                     if not _cats[name]:
                         del _cats[name]
     elif isinstance(cats, dict):
-        for cat in cats:
-            if cat == '' or not cats[cat]:
+        for key, value in cats.items():
+            if key == '' or not value:
                 continue
-            elif isinstance(cats[cat], Cat):
-                _cats[cat] = cats[cat]
+            elif isinstance(value, Cat):
+                _cats[key] = value
+            elif isinstance(value, list):
+                _cats[key] = Cat(value, key)
             else:
-                _cats[cat] = Cat.make(cats[cat], _cats, cat)  # meow
+                _cats[key] = Cat.make(value, _cats, key)  # meow
     for cat in list(_cats):  # Discard blank categories
         if not _cats[cat]:
             del _cats[cat]
     return _cats
+
+WHITESPACE_REGEX = re.compile(r'\s+')
 
 def parse_word(word, graphs=None):
     '''Parse a string of graphemes.
@@ -582,13 +570,16 @@ def parse_word(word, graphs=None):
     #         Does test begin with a valid graph? Single characters are always valid
     #             Add this valid graph to the output
     #             Remove the graph from test, and remove leading instances of separator
-    test = ''
+    word = WHITESPACE_REGEX.sub('#')
     if graphs is None:
         return list(word)
     separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
+    if not polygraphs:
+        return list(word.replace(separator, ''))
     graphemes = []
-    for char in '#'.join(f'.{word}.'.split())[1:-1]+separator:  # Convert all whitespace to a single #
+    test = ''
+    for char in word+separator:  # Convert all whitespace to a single #
         test += char
         while len(test) > 1 and not any(graph.startswith(test) for graph in polygraphs):
             for i in reversed(range(1, len(test)+1)):
@@ -601,9 +592,14 @@ def parse_word(word, graphs=None):
 def unparse_word(wordin, graphs=None):
     word = test = ''
     if graphs is None:
-        graphs = ("'",)
+        separator = ''
+        word = ''.join(wordin)
+        wordin = []
     separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
+    if not polygraphs:
+        word = ''.join(wordin)
+        wordin = []
     for graph in wordin:
         if not any(graph in poly and graph != poly for poly in polygraphs if graph != poly):  # If not a strict substring of any polygraph
             test = ''  # Can't ever be ambiguous
@@ -617,7 +613,7 @@ def unparse_word(wordin, graphs=None):
             elif not any(test in poly for poly in polygraphs):
                 test = test[1:]  # Could still be ambiguous with something later
         word += graph
-    return word
+    return word.strip(separator+'#').replace('#', ' ')
 
 def split(string, sep=None, nesting=None, minimal=False):
     '''Nesting-aware string splitting.
