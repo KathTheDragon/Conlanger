@@ -423,56 +423,12 @@ def parse_pattern(pattern, cats=None):
     Returns a list
     '''
     from .core import Word
-#     from .core import Word, split, parse_word
     if isinstance(pattern, Word):
         return [Grapheme(graph) for graph in Word]
-#     if cats is not None and 'graphs' in cats:
-#         graphs = cats['graphs']
-#     else:
-#         graphs = Cat("'")
     try:
         return compile_tokens(tokenise(pattern), cats)
     except FormatError:
         raise FormatError(f'invalid pattern: {pattern}')
-#     for char in '([{}])*?"$%<':
-#         pattern = pattern.replace(char, f' {char} ')
-#     pattern = pattern.replace('  ?', '?').replace('*  *', '**')
-#     pattern = split(pattern, ' ', nesting=(0, '([{', '}])'), minimal=True)
-#     for i, token in reversed(list(enumerate(pattern))):
-#         token = token.replace(' ', '')
-#         if not token or token == '[]':  # Blank or null
-#             del pattern[i]
-#         elif token[0] == '(':  # Optional
-#             if i < len(pattern)-1 and pattern[i+1].type == 'WildcardRep':
-#                 token = token.rstrip('?') if pattern[i+1].greedy else (token+'?')
-#             pattern[i] = Optional.make(token, cats)
-#             # To-do - reimplement flattening optionals
-#         elif token[0] == '[':  # Category
-#             pattern[i] = Category.make(token, cats)
-#         elif token[0] == '{':  # Numbers - a few types of this
-#             token = token[1:-1]
-#             if token[0] in '!=<>':  # Comparison - parse to tuple
-#                 pattern[i] = Comparison.make(token)
-#             elif token in ('*', '*?'):  # Wildcard repetition
-#                 pattern[i] = WildcardRep.make(token)
-#             elif token.startswith('u'):  # Escaped character
-#                 pattern[i] = Grapheme.make(chr(token[1:]))
-#             else:  # Repetitions - parse to int
-#                 pattern[i] = int(token)
-#         elif token in ('*', '**', '*?', '**?'):  # Wildcard
-#             pattern[i] = Wildcard.make(token)
-#         elif token in ('%', '<'):  # Target reference
-#             pattern[i] = TargetRef.make(token)
-#         elif token == '"':  # Ditto
-#             pattern[i] = Ditto.make()
-#         elif token == '$':  # Syllable break
-#             pattern[i] = SylBreak.make()
-#         else:  # Text - parse as word
-#             pattern[i:i+1] = [Grapheme(graph) for graph in parse_word(token, graphs)]
-#     for i, token in reversed(list(enumerate(pattern))):  # Second pass to evaluate repetitions
-#         if isinstance(token, int):
-#             pattern[i-1:i+1] = [pattern[i-1]]*token
-#     return pattern
 
 def parse_patterns(patterns, cats=None):
     '''Parses generation patterns.
