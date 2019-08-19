@@ -390,7 +390,7 @@ def compile_tokens(tokens, cats=None):
     if cats is not None and 'graphs' in cats:
         graphs = cats['graphs']
     else:
-        graphs = Cat("'")
+        graphs = Cat(["'"])
     elements = []
     i = 0
     while i < len(tokens):
