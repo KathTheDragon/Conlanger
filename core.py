@@ -32,9 +32,6 @@ Consider where to raise/handle exceptions
 Go over docstrings
 '''
 
-from collections import namedtuple
-from string import whitespace
-
 # == Exceptions == #
 class LangException(Exception):
     '''Base class for exceptions in this package'''
@@ -633,6 +630,7 @@ def split(string, sep=None, nesting=None, minimal=False):
 
     Returns a list.
     '''
+    from string import whitespace
     if sep is None:
         sep = whitespace
         minimal = True
