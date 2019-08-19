@@ -45,6 +45,16 @@ class FormatError(LangException):
 class RuleError(LangException):
     '''Exception raised for errors when running rules.'''
 
+class CompilerError(LangException):
+    '''Exception raised for errors when compiling rules.'''
+    def __init__(self, error, value, linenum, column):
+        super().__init__(f'{error}: `{value}` @ {linenum}:{column}')
+
+class TokenError(CompilerError):
+    '''Exception raised for errors involving tokens.'''
+    def __init__(self, error, token):
+        super().__init__(error, token.value, token.linenum, token.column)
+
 # == Decorators == #
 # Implements a decorator we can use as a variation on @property, where the value is calculated once and then stored
 class memoisedproperty(object):
@@ -60,6 +70,16 @@ class memoisedproperty(object):
         return value
 
 # == Classes == #
+@dataclass
+class Token:
+    type: str
+    value: str
+    linenum: int
+    column: int
+
+    def __iter__(self):
+        return iter((self.type, self.value))
+
 class Cat(list):
     '''Represents a category of graphemes.'''
 

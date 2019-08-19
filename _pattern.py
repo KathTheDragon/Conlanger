@@ -36,7 +36,7 @@ Handling of optionals needs a lot of work
 import re
 from dataclasses import dataclass, InitVar
 from typing import Dict, List
-from .core import Cat, FormatError
+from .core import FormatError, CompilerError, TokenError, Token, Cat
 
 ## Constants
 TOKENS = {
@@ -60,15 +60,6 @@ TOKENS = {
 TOKEN_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in TOKENS.items()))
 
 ## Classes
-@dataclass
-class Token:
-    type: str
-    value: str
-    column: int
-
-    def __iter__(self):
-        return iter((self.type, self.value))
-
 @dataclass(repr=False, eq=False)
 class Element:
     def __str__(self):
