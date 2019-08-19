@@ -347,28 +347,28 @@ def tokenise(string, colstart=None, linenum=0):
                     yield Token('END', value, linenum, column)
                     return
                 else:
-                    raise FormatError(f'unexpected character: {value} @ {column}')
+                    raise CompilerError(f'unexpected character', value, linenum, column)
         elif type in ('LOPT', 'LCAT'):  # Left brackets
             if value == '(' and brackets and brackets[-1] == '[':
-                raise FormatError(f'optionals may not appear inside categories: {value} @ {column}')
+                raise CompilerError(f'optionals may not appear inside categories', value, linenum, column)
             brackets.append(value)
         elif type in ('ROPT', 'RCAT'):  # Right brackets
             if not brackets:
-                raise FormatError(f'unexpected bracket: {value} @ {column}')
+                raise CompilerError(f'unexpected bracket', value, linenum, column)
             bracket = brackets.pop()
             if bracket+value[0] not in ('()', '[]'):
-                raise FormatError(f'mismatched brackets: {value} @ {column}')
+                raise CompilerError(f'mismatched brackets', value, linenum, column)
         elif type == 'UNKNOWN':
             if nested:
                 yield Token('END', value, linenum, column)
                 return
             else:
-                raise FormatError(f'unexpected character: {value} @ {column}')
+                raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
 
 def match_brackets(tokens, start=0):
     if tokens[start].type not in ('LOPT', 'LCAT'):
-        raise FormatError(f'expected bracket: {tokens[start].value} @ {tokens[start].column}')
+        raise TokenError(f'expected bracket', tokens[start])
     else:
         left = tokens[start].type
         right = left.replace('L', 'R')
@@ -380,7 +380,7 @@ def match_brackets(tokens, start=0):
             depth -= 1
             if depth == 0:
                 return i
-    raise FormatError(f'unmatched bracket: {tokens[start].value} @ {tokens[start].column}')
+    raise TokenError(f'unmatched bracket', tokens[start])
 
 def compile_tokens(tokens, cats=None):
     from .core import parse_word
@@ -409,7 +409,7 @@ def compile_tokens(tokens, cats=None):
             cls = ELEMENT_DICT[type]
             elements.append(cls.fromTokens(tokens[i:j], cats))
         else:
-            raise FormatError(f'unexpected token: {value} @ {tokens[i].column}')
+            raise TokenError(f'unexpected token', tokens[i])
         i = j
     return elements
 
@@ -427,8 +427,8 @@ def parse_pattern(pattern, cats=None):
         return [Grapheme(graph) for graph in Word]
     try:
         return compile_tokens(tokenise(pattern), cats)
-    except FormatError:
-        raise FormatError(f'invalid pattern: {pattern}')
+    except CompilerError as e:
+        raise FormatError(f'invalid pattern: {pattern}') from e
 
 def parse_patterns(patterns, cats=None):
     '''Parses generation patterns.
