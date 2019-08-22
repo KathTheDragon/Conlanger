@@ -87,7 +87,7 @@ class Cat:
     name: str = field(default=None, compare=False)
 
     def __str__(self):
-        return ', '.join(self)
+        return f'[{", ".join(self)}]'
 
     def __len__(self):
         return len(self.values)
