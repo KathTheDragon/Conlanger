@@ -33,7 +33,7 @@ Go over docstrings
 '''
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 
 # == Exceptions == #
 class LangException(Exception):
@@ -160,7 +160,7 @@ class Word:
         strip         -- remove leading and trailing graphemes
     '''
     phones: list = field(init=False)
-    lexeme: InitVar[] = field(default_factory=list)
+    lexeme: InitVar[str] = ''
     graphs: Cat = None
     syllabifier: 'Syllabifier' = None
 
