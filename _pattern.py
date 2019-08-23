@@ -387,7 +387,7 @@ def compile_tokens(tokens, cats=None):
     from .core import parse_word
     tokens = list(tokens)
     if not tokens:
-        return None
+        return []
     if cats is not None and 'graphs' in cats:
         graphs = cats['graphs']
     else:
