@@ -53,6 +53,13 @@ from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compil
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__), 'logging.conf'))
+CATEGORY_TOKENS = {
+    'CATEGORY': r'^\w+',
+    'OP': r'(?:\+|\-)?=| (?:\+|\-)?= ',
+    'VALUES': r'.+$',  # Might make this part more precise
+    'UNKNOWN': r'.',
+}
+CATEGORY_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in CATEGORY_TOKENS.items()))
 
 # == Globals == #
 logger = None
@@ -310,6 +317,35 @@ def parse_wordset(wordset, cats=None, syllabifier=None):
             line = []
         _wordset.append(line)
     return _wordset
+
+def tokeniseCategory(line, linenum=0):
+    for match in CATEGORY_REGEX.finditer(line):
+        type = match.lastgroup
+        value = match.group()
+        column = match.start()
+        if type == 'OP':
+            value = value.strip()
+        elif type == 'UNKNOWN':
+            raise CompilerError(f'unexpected character', value, linenum, column)
+        yield Token(type, value, linenum, column)
+
+def compileCategory(tokens, cats=None):
+    tokens = list(tokens)
+    name, op, values = [token.value for token in tokens]
+    if ',' not in values:
+        values += ','
+    cat = Cat.make(f'[{values}]', cats, name)
+    if op == '=':
+        return {name: cat}
+    else:
+        if cats is None or name not in cats:
+            raise TokenError(f'category {name!r} is not defined', tokens[1])
+        if op == '+=':
+            return {name: cats[name]+cat}
+        elif op == '-=':
+            return {name: cats[name]-cat}
+        else:
+            raise TokenError('invalid category operation', tokens[1])
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
