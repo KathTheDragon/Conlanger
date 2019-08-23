@@ -46,8 +46,8 @@ from collections import namedtuple
 from dataclasses import dataclass, InitVar
 from math import ceil
 from random import randint
-from .core import LangException, FormatError, RuleError, Cat, Word, parse_cats, split
-from ._pattern import parse_pattern, escape
+from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, parse_cats, split, partition
+from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compile_tokens as compilePattern
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
