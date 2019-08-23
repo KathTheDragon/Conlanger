@@ -663,4 +663,7 @@ def partition(sequence, *, sep=None, sep_func=None, yield_sep=False):
             else:
                 yield sequence[i:j]
             i = j+1
-    yield sequence[i:]
+    if yield_sep:
+        yield sequence[i:], None
+    else:
+        yield sequence[i:]
