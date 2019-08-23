@@ -570,7 +570,7 @@ def parse_word(word, graphs=None):
     #         Does test begin with a valid graph? Single characters are always valid
     #             Add this valid graph to the output
     #             Remove the graph from test, and remove leading instances of separator
-    word = WHITESPACE_REGEX.sub('#')
+    word = WHITESPACE_REGEX.sub('#', word)
     if graphs is None:
         return list(word)
     separator = graphs[0]
