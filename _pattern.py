@@ -318,6 +318,7 @@ def escape(string):
         string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
     return string
 
+# Don't slice the string when calling this
 def tokenise(string, colstart=None, linenum=0):
     '''Tokenise a string using pattern notation.
 
@@ -337,10 +338,10 @@ def tokenise(string, colstart=None, linenum=0):
             yield Token('END', '', colstart)
         return
     brackets = []
-    for match in TOKEN_REGEX.finditer(string):
+    for match in TOKEN_REGEX.finditer(string, colstart):
         type = match.lastgroup
         value = match.group()
-        column = match.start() + colstart
+        column = match.start()
         if type == 'COMMA':
             if not (brackets and brackets[-1] == '['):  # Commas are only licensed inside categories
                 if nested:
