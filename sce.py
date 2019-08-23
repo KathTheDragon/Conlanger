@@ -53,6 +53,24 @@ from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compil
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__), 'logging.conf'))
+FLAGS = [
+    'ignore',
+    'rtl',
+    'ditto',
+    'stop',
+    'repeat',
+    'persist',
+    'chance',
+]
+FLAG_TOKENS = {
+    'FLAG': '|'.join(FLAGS),
+    'COLON': r': ?',
+    'ARGUMENT': r'\d+',
+    'NEGATION': r'!',
+    'SEPARATOR': r'; ?',
+    'UNKNOWN': r'.',
+}
+FLAG_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in FLAG_TOKENS.items()))
 CATEGORY_TOKENS = {
     'CATEGORY': r'^\w+',
     'OP': r'(?:\+|\-)?=| (?:\+|\-)?= ',
@@ -346,6 +364,64 @@ def compileCategory(tokens, cats=None):
             return {name: cats[name]-cat}
         else:
             raise TokenError('invalid category operation', tokens[1])
+
+def tokeniseFlags(line, linenum=0, colstart=None):
+    for match in FLAG_REGEX.finditer(line, colstart):
+        type = match.lastgroup
+        value = match.group()
+        column = match.start()
+        if type == 'UNKNOWN':
+            raise CompilerError(f'unexpected character', value, linenum, column)
+        yield Token(type, value, linenum, column)
+
+def compileFlags(tokens):
+    tokens = list(tokens)
+    binaryflags = ('ignore', 'rtl')
+    ternaryflags = ('ditto', 'stop')
+    numericflags = {'repeat': MAX_RUNS, 'persist': MAX_RUNS, 'chance': 100}  # Maximum values
+    flags = {}
+    for flag, token in partition(tokens, sep_func=(lambda token: token.type == 'SEPARATOR'), yield_sep=True):
+        if not flag:
+            raise TokenError('expected flag', token)
+        elif flag[0].type == 'NEGATION':
+            name = flag[-1].value
+            if len(flag) == 1:
+                raise TokenError('expected flag name', token)
+            elif flag[1].type != 'FLAG':
+                raise TokenError('expected flag name', flag[1])
+            elif name not in ternaryflags:
+                raise TokenError('invalid ternary flag name', flag[1])
+            elif len(flag) == 2:
+                flags[name] = -1
+            else:
+                raise TokenError('expected semicolon', flag[2])
+        elif flag[0].type == 'FLAG':
+            name = flag[0].value
+            arg = flag[-1].value
+            if name not in FLAGS:
+                raise TokenError('invalid flag name', flag[0])
+            elif len(flag) == 1:
+                if name in numericflags:
+                    flags[name] = numericflags[name]  # Set to maximum value
+                else:
+                    flags[name] = 1
+            elif flag[1].type != 'COLON':
+                raise TokenError('expected colon or semicolon', flag[1])
+            elif name not in numericflags:
+                raise TokenError('invalid numeric flag name', flag[1])
+            elif len(flag) == 2:
+                raise TokenError('expected integer argument', token)
+            elif flag[2].type != 'ARGUMENT':
+                raise TokenError('expected integer argument', flag[2])
+            elif not (1 <= int(arg) <= numericflags[name]):
+                raise TokenError('argument out of range', flag[2])
+            elif len(flag) == 3:
+                flags[name] = int(arg)
+            else:
+                raise TokenError('expected semicolon', flag[3])
+        else:
+            raise TokenError('invalid flag', flag[0])
+    return Flags(**flags)
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
