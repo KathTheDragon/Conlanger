@@ -53,6 +53,20 @@ from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compil
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__), 'logging.conf'))
+METARULES = [
+    'block',
+    'def',
+    'rule',
+]
+METARULE_TOKENS = {
+    'METARULE': fr'^!(?:{"|".join(METARULES)})',
+    'COLON': r': ?',
+    'NUMBER': r'\d+',
+    'IDENTIFIER': r'[a-z_]+',
+    'SPACE': r' ',
+    'UNKNOWN': r'.',
+}
+METARULE_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in METARULE_TOKENS.items()))
 FLAGS = [
     'ignore',
     'rtl',
@@ -422,6 +436,63 @@ def compileFlags(tokens):
         else:
             raise TokenError('invalid flag', flag[0])
     return Flags(**flags)
+
+def tokeniseMetarule(line, linenum=0):
+    for match in METARULE_REGEX.finditer(line):
+        type = match.lastgroup
+        value = match.group()
+        column = match.start()
+        if type == 'METARULE':
+            value = value[1:]
+        elif type == 'SPACE':
+            yield Token(type, value, linenum, column)
+            yield from tokeniseFlags(line, linenum, match.end())
+            break
+        elif type == 'UNKNOWN':
+            raise CompilerError(f'unexpected character', value, linenum, column)
+        yield Token(type, value, linenum, column)
+
+def compileMetarule(tokens):
+    tokens = list(tokens)
+    if not tokens:
+        raise ValueError('tokens cannot be empty')
+    name = tokens[0].value
+    for ix, token in enumerate(tokens):
+        if token.type == 'SPACE':  # Found flags
+            flags = compileFlags(tokens[ix+1:])
+            break
+    else:
+        ix = len(tokens)
+        if name == 'block':
+            flags = Flags()
+        else:
+            flags = None
+    arg = tokens[ix-1].value
+    if tokens[0].type != 'METARULE':
+        raise TokenError('expected metarule name', tokens[0])
+    elif name not in METARULES:
+        raise TokenError('invalid metarule name', tokens[0])
+    elif name in ('def', 'rule') and flags:
+        raise FormatError(f'metarule !{name} cannot take flags')
+    elif ix == 1:
+        if name == 'block':
+            arg = None
+        else:
+            raise FormatError(f'metarule !{name} requires an argument')
+    elif tokens[1].type != 'COLON':
+        raise TokenError('expected colon', tokens[1])
+    elif ix == 2:
+        raise TokenError('colon must be followed by an argument', tokens[1])
+    elif tokens[2].type != 'NUMBER' and name == 'block':
+        raise TokenError('metarule !block requires an integer argument', tokens[2])
+    elif tokens[2].type != 'IDENTIFIER' and name in ('def', 'rule'):
+        raise TokenError(f'metarule !{name} requires an alphabetic argument', tokens[2])
+    elif ix == 3:
+        if name == 'block':
+            arg = int(arg)
+    else:
+        raise TokenError('expected space or newline', tokens[3])
+    return name, arg, flags
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
