@@ -343,12 +343,11 @@ def tokenise(string, colstart=None, linenum=0):
         value = match.group()
         column = match.start()
         if type == 'COMMA':
-            if not (brackets and brackets[-1] == '['):  # Commas are only licensed inside categories
-                if nested:
+            if not (brackets and brackets[-1] == '['):
+                if not brackets and nested:
                     yield Token('END', value, linenum, column)
                     return
-                else:
-                    raise CompilerError(f'unexpected character', value, linenum, column)
+                raise CompilerError(f'unexpected comma', value, linenum, column)
         elif type in ('LOPT', 'LCAT'):  # Left brackets
             if value == '(' and brackets and brackets[-1] == '[':
                 raise CompilerError(f'optionals may not appear inside categories', value, linenum, column)
