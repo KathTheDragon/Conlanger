@@ -651,13 +651,13 @@ def split(string, sep=None, nesting=None, minimal=False):
     return result
 
 def partition(sequence, *, sep=None, sep_func=None, yield_sep=False):
-    if separator is None == separator_func is None:
+    if sep is None == sep_func is None:
         raise ValueError('exactly one of separator and separator_func must be given')
-    if separator is not None:
-        separator_func = lambda item: item == separator
+    if sep is not None:
+        sep_func = lambda item: item == sep
     i = 0
     for j, item in enumerate(sequence):
-        if separator_func(item):
+        if sep_func(item):
             if yield_sep:
                 yield (sequence[i:j], sequence[j])
             else:
