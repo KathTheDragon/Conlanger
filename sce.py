@@ -726,6 +726,77 @@ def compileRule(tokens, cats=None):
     fields['excs'] = compileEnvironments(fields.get('excs', []), cats)
     return Rule(**fields)
 
+def compileLine(line, cats=None, linenum=0):
+    if not line:
+        return None
+    # Attempt to tokenise as category
+    tokens = list(tokeniseCategory(line, linenum))
+    if [token.type for token in tokens] == ['CATEGORY', 'OP', 'VALUES']:
+        return compileCategory(tokens, cats)
+    # Attempt to tokenise as metarule
+    tokens = list(tokeniseMetarule(line, linenum))
+    if tokens[0].type == 'METARULE':
+        return compileMetarule(tokens, cats)
+    # Attempt to tokenise as rule
+    return compileRule(tokeniseRule(line, linenum), cats)
+
+def makeBlock(ruleset, start=None, num=None, defs=None):
+    if defs is None:
+        defs = {}
+    else:
+        defs = defs.copy()
+    block = []
+    if start is None:
+        i = 0
+    else:
+        i = start
+    while len(block) != num and i < len(ruleset):
+        rule = ruleset[i]
+        i += 1
+        if isinstance(rule, Rule):  # Rule
+            block.append(rule)
+        elif isinstance(rule, tuple):  # Metarule
+            name, arg, flags = rule
+            if name == 'block':
+                _block, i, defs = makeBlock(ruleset, i, arg, defs)
+                block.append(RuleBlock(_block, flags))
+            elif name == 'def':
+                _block, i, defs = makeBlock(ruleset, i, 1, defs)
+                defs[arg] = _block
+            elif name == 'rule':
+                block.extend(defs[arg])
+    if start is None:
+        return _block
+    else:
+        return _block, i, defs
+
+def compileRuleset(ruleset, cats=None):
+    if isinstance(ruleset, str):
+        ruleset = ruleset.splitlines()
+    if cats is None:
+        cats = {}
+    else:
+        cats = cats.copy()
+    _ruleset = []
+    for linenum, line in enumerate(ruleset):
+        # Escape characters
+        line = escape(line)
+        # Remove comments
+        line = line.split('//')[0].strip()
+        # Compile
+        try:
+            rule = compileLine(line, cats, linenum)
+        except CompilerError as e:
+            logger.warning(f'`{line!r}` failed to compile due to bad formatting: {e}')
+        else:
+            if isinstance(rule, dict):  # Category
+                cats.update(rule)
+            else:
+                _ruleset.append(rule)
+    # Evaluate meta-rules
+    ruleset = makeBlock(_ruleset)[0]
+    return RuleBlock(ruleset)
+
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
 
