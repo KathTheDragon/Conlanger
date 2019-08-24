@@ -809,7 +809,7 @@ def compileRuleset(ruleset, cats=None):
             else:
                 _ruleset.append(rule)
     # Evaluate meta-rules
-    ruleset = makeBlock(_ruleset)[0]
+    ruleset = makeBlock(_ruleset)
     return RuleBlock(ruleset)
 
 def compile_ruleset(ruleset, cats=None):
