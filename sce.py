@@ -779,8 +779,6 @@ def compileRuleset(ruleset, cats=None):
         cats = cats.copy()
     _ruleset = []
     for linenum, line in enumerate(ruleset):
-        # Escape characters
-        line = escape(line)
         # Remove comments
         line = line.split('//')[0].strip()
         # Compile

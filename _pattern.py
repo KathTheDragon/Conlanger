@@ -48,7 +48,7 @@ TOKENS = {
     'RCAT': r'\]',
     'WILDCARDREP': r'\{\*\??\}',
     'COMPARISON': r'\{(?:!=|[=<>]=?)\d+\}',
-    'ESCAPE': r'\{u\d+\}',
+    'ESCAPE': r'\\.',
     'REPETITION': r'\{\d+\}',
     'WILDCARD': r'\*\*?\??',
     'TARGETREF': r'%|<',
@@ -121,7 +121,7 @@ class Grapheme(Element):
     @staticmethod
     def fromString(string=None, cats=None):
         if TOKENS['ESCAPE'].match(string) is not None:  # Sanity check
-            return Grapheme(grapheme=chr(int(value[2:-1])))
+            return Grapheme(grapheme=value[1])
         raise TokenError(f'invalid {cls.__name__}', tokens[0])
 
     @staticmethod
@@ -130,7 +130,7 @@ class Grapheme(Element):
             raise CompilerError(f'too many tokens', tokens, tokens[0].linenum, tokens[0].column)
         type, value = tokens[0]
         if type == 'ESCAPE' and TOKENS['ESCAPE'].match(value) is not None:  # Sanity check
-            return Grapheme(grapheme=chr(int(value[2:-1])))
+            return Grapheme(grapheme=value[1])
         raise TokenError('invalid Grapheme', tokens[0])
 
     def match(self, word, pos, ix, step, istep):
