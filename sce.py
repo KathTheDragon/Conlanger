@@ -698,7 +698,8 @@ def compileRule(line, linenum=0, cats=None):
         raise TokenError('unexpected token', tokens[0])
     fields = {
         'otherwise': None,
-        'flags': Flags()
+        'flags': Flags(),
+        'rule': line
     }
     # Extract flags
     for ix, token in enumerate(tokens):
