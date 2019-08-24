@@ -365,7 +365,8 @@ def tokenise(string, colstart=None, linenum=0):
             else:
                 raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
-    yield Token('END', value, linenum, match.end())
+    if nested:
+        yield Token('END', '', linenum, match.end())
 
 def match_brackets(tokens, start=0):
     if tokens[start].type not in ('LOPT', 'LCAT'):
