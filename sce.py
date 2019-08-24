@@ -802,7 +802,7 @@ def compileRuleset(ruleset, cats=None):
         try:
             rule = compileLine(line, linenum, cats)
         except CompilerError as e:
-            logger.warning(f'`{line!r}` failed to compile due to bad formatting: {e}')
+            logger.warning(f'{line!r} failed to compile due to bad formatting: {e}')
         else:
             if isinstance(rule, dict):  # Category
                 cats.update(rule)
