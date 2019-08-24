@@ -448,8 +448,10 @@ def tokeniseCategory(line, linenum=0):
             raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
 
-def compileCategory(tokens, cats=None):
-    tokens = list(tokens)
+def compileCategory(line, linenum=0, cats=None):
+    tokens = list(tokeniseCategory(line, linenum))
+    if [token.type for token in tokens] != ['CATEGORY', 'OP', 'VALUES']:
+        raise FormatError(f'{line!r} is not a category definition')
     name, op, values = [token.value for token in tokens]
     if ',' not in values:
         values += ','
@@ -539,8 +541,8 @@ def tokeniseMetarule(line, linenum=0):
             raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
 
-def compileMetarule(tokens):
-    tokens = list(tokens)
+def compileMetarule(line, linenum=0):
+    tokens = list(tokeniseMetarule(line, linenum))
     if not tokens:
         raise ValueError('tokens cannot be empty')
     name = tokens[0].value
@@ -560,12 +562,16 @@ def compileMetarule(tokens):
     elif name not in METARULES:
         raise TokenError('invalid metarule name', tokens[0])
     elif name in ('def', 'rule') and flags:
-        raise FormatError(f'metarule !{name} cannot take flags')
+        raise TokenError(f'metarule !{name} cannot take flags', tokens[ix])
     elif ix == 1:
         if name == 'block':
             arg = None
         else:
-            raise FormatError(f'metarule !{name} requires an argument')
+            if ix < len(tokens):
+                token = tokens[ix]
+            else:
+                token = Token('', '', linenum, tokens[-1].column+len(tokens[-1].value))
+            raise TokenError(f'metarule !{name} requires an argument', token)
     elif tokens[1].type != 'COLON':
         raise TokenError('expected colon', tokens[1])
     elif ix == 2:
@@ -680,8 +686,12 @@ FIELD_MARKERS = {
     'EXCEPTION': 'excs',
 }
 
-def compileRule(tokens, cats=None):
-    tokens = list(tokens)
+def compileRule(line, linenum=0, cats=None):
+    if isinstance(line, str):
+        tokens = list(tokeniseRule(line, linenum))
+    else:
+        tokens = line
+        line = ''
     if not tokens:
         return None
     elif tokens[0].type not in ('EPENTHESIS', 'DELETION', 'TARGET'):
@@ -730,15 +740,21 @@ def compileLine(line, cats=None, linenum=0):
     if not line:
         return None
     # Attempt to tokenise as category
-    tokens = list(tokeniseCategory(line, linenum))
-    if [token.type for token in tokens] == ['CATEGORY', 'OP', 'VALUES']:
-        return compileCategory(tokens, cats)
+    try:
+        return compileCategory(line, linenum, cats)
+    except TokenError:
+        raise
+    except:
+        pass
     # Attempt to tokenise as metarule
-    tokens = list(tokeniseMetarule(line, linenum))
-    if tokens[0].type == 'METARULE':
-        return compileMetarule(tokens, cats)
+    try:
+        return compileMetarule(line, linenum)
+    except TokenError:
+        raise
+    except:
+        pass
     # Attempt to tokenise as rule
-    return compileRule(tokeniseRule(line, linenum), cats)
+    return compileRule(line, linenum, cats)
 
 def makeBlock(ruleset, start=None, num=None, defs=None):
     if defs is None:
