@@ -229,13 +229,13 @@ class Rule:
 
     def __iter__(self):
         return iter((
-            self.rule,
             self.tars,
             self.reps,
             self.envs,
             self.excs,
             self.otherwise,
-            self.flags
+            self.flags,
+            self.rule,
         ))
 
     def apply(self, word):
