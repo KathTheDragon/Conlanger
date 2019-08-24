@@ -53,6 +53,25 @@ from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compil
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__), 'logging.conf'))
+RULE_TOKENS = {
+    'EPENTHESIS': r'^\+',
+    'DELETION': r'^\-',
+    'TARGET': r'^',
+    'MOVE': r'>\^\?| >\^\? | > \^\? ?',
+    'COPY': r'>\^| >\^ | > \^ ?',
+    'REPLACEMENT': r'>| > ',
+    'ENVIRONMENT': r'/| / ',
+    'EXCEPTION': r'!| ! ',
+    'OR': r', ?',
+    'AND': r'&| & ',
+    'PLACEHOLDER': r'_',
+    # 'ADJACENCY': r'~',
+    'INDICES': r'@\-?\d+(?:\|\-?\d+)*',
+    'SPACE': r' ',
+    'UNKNOWN': r'.',
+    'END': ''
+}
+RULE_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in RULE_TOKENS.items()))
 METARULES = [
     'block',
     'def',
@@ -104,6 +123,66 @@ class WordUnchanged(LangException):
     '''Used to indicate that the word was not changed by the rule.'''
 
 # == Classes == #
+@dataclass
+class Target:
+    pattern: list
+    indices: list = None
+
+    def __str__(self):
+        if self.indices is None:
+            return str(self.pattern)
+        elif not self.tars:
+            return f'@{self.indices}'
+        else:
+            return f'{self.pattern}@{self.indices}'
+
+    def __iter__(self):
+        return iter((self.pattern, self.indices))
+
+@dataclass
+class Replacement:
+    pattern: list
+
+    def __str__(self):
+        return str(self.pattern)
+
+    def __iter__(self):
+        return iter((self.pattern, self.indices))
+
+@dataclass
+class LocalEnvironment:
+    left: list
+    right: list
+
+    def __str__(self):
+        if self.left and self.right:
+            return f'{self.left}_{self.right}'
+        elif self.left:
+            return f'{self.left}_'
+        elif self.right:
+            return f'_{self.right}'
+        else:
+            return '_'
+
+    def __iter__(self):
+        return iter((self.left, self.right))
+
+@dataclass
+class GlobalEnvironment:
+    pattern: list
+    indices: list = None
+
+    def __str__(self):
+        if self.indices is None:
+            return str(self.pattern)
+        elif not self.tars:
+            return f'@{self.indices}'
+        else:
+            return f'{self.pattern}@{self.indices}'
+
+    def __iter__(self):
+        return iter((self.pattern, self.indices))
+
 @dataclass
 class Flags:
     ignore: int = 0
@@ -501,6 +580,151 @@ def compileMetarule(tokens):
     else:
         raise TokenError('expected space or newline', tokens[3])
     return name, arg, flags
+
+def tokeniseRule(line, linenum=0):
+    colstart = 0
+    while colstart < len(line):
+        match = RULE_REGEX.match(line, colstart)
+        type = match.lastgroup
+        value = match.group()
+        column = match.start()
+        colstart = match.end()
+        if type == 'INDICES':
+            yield Token(type, value[1:], linenum, column)
+            continue
+        elif type == 'SPACE':
+            yield Token(type, value, linenum, column)
+            yield from tokeniseFlags(line, linenum, colstart)
+            break
+        elif type == 'UNKNOWN':
+            raise CompilerError(f'unexpected character', value, linenum, column)
+        yield Token(type, value, linenum, column)
+        for token in tokenisePattern(line, colstart, linenum):
+            if token.type != 'END':
+                yield token
+            else:
+                colstart = token.column
+                break
+    else:
+        yield Token('END', '', linenum, colstart)
+
+def compileTargets(tokens, cats=None):
+    targets = []
+    if not tokens:
+        return []
+    if tokens[-1].type == 'OR':
+        raise TokenError('invalid comma', tokens[-1])
+    for pattern, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
+        if not pattern:
+            raise TokenError('unexpected comma', sep)
+        if pattern[-1].type == 'INDICES':
+            pattern, indices = pattern[:-1], [int(index) for index in pattern[-1].value.split('|')]
+        else:
+            indices = None
+        targets.append(Target(compilePattern(pattern, cats), indices))
+    return targets
+
+def compileReplacements(tokens, cats=None):
+    replacements = []
+    if not tokens:
+        return []
+    if tokens[-1].type == 'OR':
+        raise TokenError('invalid comma', tokens[-1])
+    type = tokens[0].type.lower()
+    if type in ('move', 'copy'):
+        replacements = compileEnvironments(tokens, cats)
+        # Space for sanity-checking the environments - in particular, global envs must have no pattern
+        return (type, replacements)
+    for pattern, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
+        if not pattern:
+            raise TokenError('unexpected comma', sep)
+        replacements.append(Replacement(compilePattern(pattern, cats)))
+    return replacements
+
+def compileEnvironments(tokens, cats=None):
+    environments = []
+    if not tokens:
+        return []
+    if tokens[-1].type == 'OR':
+        raise TokenError('invalid comma', tokens[-1])
+    for environment, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
+        if not environment:
+            raise TokenError('unexpected comma', sep)
+        _environment = []
+        if tokens[-1].type == 'AND':
+            raise TokenError('invalid and', tokens[-1])
+        for pattern, sep in partition(environment, sep_func=(lambda t: t.type == 'AND'), yield_sep=True):
+            if not pattern:
+                raise TokenError('unexpected comma', sep)
+            _env = list(partition(pattern, sep_func=(lambda t: t.type == 'PLACEHOLDER')))
+            if len(_env) == 2:
+                left, right = _env
+                _environment.append(LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats)))
+            else:
+                if pattern[-1].type == 'INDICES':
+                    pattern, indices = pattern[:-1], [int(index) for index in pattern[-1].value.split('|')]
+                else:
+                    indices = None
+                _environment.append(GlobalEnvironment(compilePattern(pattern, cats), indices))
+        environments.append(_environment)
+    return environments
+
+FIELD_MARKERS = {
+    'EPENTHESIS': 'reps',
+    'DELETION': 'tars',
+    'TARGET': 'tars',
+    'MOVE': 'reps',
+    'COPY': 'reps',
+    'REPLACEMENT': 'reps',
+    'ENVIRONMENT': 'envs',
+    'EXCEPTION': 'excs',
+}
+
+def compileRule(tokens, cats=None):
+    tokens = list(tokens)
+    if not tokens:
+        return None
+    elif tokens[0].type not in ('EPENTHESIS', 'DELETION', 'TARGET'):
+        raise TokenError('unexpected token', tokens[0])
+    fields = {
+        'otherwise': None,
+        'flags': Flags()
+    }
+    # Extract flags
+    for ix, token in enumerate(tokens):
+        if token.type == 'SPACE':
+            fields['flags'] = compileFlags(tokens[ix+1:])
+            tokens[ix].type = 'END'
+            break
+    # Extract remainder of fields
+    i = None
+    for j, token in enumerate(tokens):
+        type, value = token
+        if type in RULE_TOKENS and type not in ('OR', 'AND', 'PLACEHOLDER', 'INDICES'):
+            if i is not None:
+                field = FIELD_MARKERS[tokens[i].type]
+                if field in fields:
+                    raise TokenError('unexpected field marker', tokens[i])
+                fields[field] = tokens[i:j]
+            i = j
+            if type in ('MOVE', 'COPY', 'REPLACEMENT'):
+                if 'reps' in fields:  # Detected an otherwise
+                    fields['otherwise'] = compileRule(fields.get('tars', []) + tokens[j:ix+1], cats)
+                    break
+            elif type == 'END':
+                break
+    # Check for restricted field combinations
+    if 'tars' in fields and 'reps' in fields:
+        if fields['tars'][0].type == 'DELETION':
+            raise TokenError('replacement field not allowed with deletion', fields['reps'][0])
+        if fields['reps'][0].type == 'EPENTHESIS':
+            raise TokenError('target field not allowed with epenthesis', fields['tars'][0])
+    # Compile fields
+    fields['tars'] = compileTargets(fields.get('tars', []), cats) or [[]]
+    fields['reps'] = compileReplacements(fields.get('reps', []), cats) or [[]]
+    fields['envs'] = compileEnvironments(fields.get('envs', []), cats) or [[]]
+    fields['excs'] = compileEnvironments(fields.get('excs', []), cats)
+    return Rule(**fields)
 
 def compile_ruleset(ruleset, cats=None):
     '''Compile a sound change ruleset.
