@@ -737,7 +737,7 @@ def compileRule(line, linenum=0, cats=None):
     fields['excs'] = compileEnvironments(fields.get('excs', []), cats)
     return Rule(**fields)
 
-def compileLine(line, cats=None, linenum=0):
+def compileLine(line, linenum=0, cats=None):
     if not line:
         return None
     # Attempt to tokenise as category
@@ -800,7 +800,7 @@ def compileRuleset(ruleset, cats=None):
         line = line.split('//')[0].strip()
         # Compile
         try:
-            rule = compileLine(line, cats, linenum)
+            rule = compileLine(line, linenum, cats)
         except CompilerError as e:
             logger.warning(f'`{line!r}` failed to compile due to bad formatting: {e}')
         else:
