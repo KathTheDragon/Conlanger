@@ -42,7 +42,6 @@ import logging
 import logging.config
 import os.path
 import re
-from collections import namedtuple
 from dataclasses import dataclass, InitVar
 from math import ceil
 from random import randint
