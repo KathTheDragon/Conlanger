@@ -158,7 +158,7 @@ class Category(Element):
 
     def __str__(self):
         if self.cat.name is None:
-            return f'[{self.cat}]'
+            return str(self.cat)
         else:
             return f'[{self.cat.name}]'
 
