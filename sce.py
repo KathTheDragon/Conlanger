@@ -619,10 +619,13 @@ def compileTargets(tokens, cats=None):
         return []
     if tokens[-1].type == 'OR':
         raise TokenError('invalid comma', tokens[-1])
+    type = tokens[0].type
     for pattern, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
         if not pattern:
             raise TokenError('unexpected comma', sep)
         if pattern[-1].type == 'INDICES':
+            if type == 'REPLACEMENT':
+                raise TokenError('indices not allowed in replacement field', pattern[-1])
             pattern, indices = pattern[:-1], [int(index) for index in pattern[-1].value.split('|')]
         else:
             indices = None
@@ -640,11 +643,17 @@ def compileReplacements(tokens, cats=None):
         replacements = compileEnvironments(tokens, cats)
         # Space for sanity-checking the environments - in particular, global envs must have no pattern
         return (type, replacements)
-    for pattern, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
-        if not pattern:
-            raise TokenError('unexpected comma', sep)
-        replacements.append(Replacement(compilePattern(pattern, cats)))
-    return replacements
+    else:
+        replacements = compileTargets(tokens, cats)  # Necessary because of indexed epenthesis
+        if type == 'epenthesis':
+            targets = []
+            for i, replacement in enumerate(replacements):
+                pattern, indices = replacement
+                targets.append(Target([], indices))
+                replacements[i] = Replacement(pattern)
+            return (indices, replacements)
+        else:
+            return [Replacement(r.pattern) for r in replacements]
 
 def compileEnvironments(tokens, cats=None):
     environments = []
@@ -734,6 +743,9 @@ def compileRule(line, linenum=0, cats=None):
     fields['reps'] = compileReplacements(fields.get('reps', []), cats) or [[]]
     fields['envs'] = compileEnvironments(fields.get('envs', []), cats) or [[]]
     fields['excs'] = compileEnvironments(fields.get('excs', []), cats)
+    # Handle indexed epenthesis
+    if isinstance(fields['reps'], tuple) and isinstance(fields['reps'][0], list):  # Indexed epenthesis
+        fields['tars'], fields['reps'] = fields['reps']
     return Rule(**fields)
 
 def compileLine(line, linenum=0, cats=None):
