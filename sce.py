@@ -131,13 +131,13 @@ class Rule:
         apply       -- apply the rule to a word
         check_match -- check if the match is valid
     '''
-    rule: str
     tars: list
     reps: list
     envs: list
     excs: list
     otherwise: 'Rule'
     flags: Flags
+    rule: str = ''
 
     def __repr__(self):
         return f"Rule('{self!s}')"
@@ -149,7 +149,15 @@ class Rule:
         return self[1:] == other[1:]
 
     def __iter__(self):
-        return iter((self.rule, self.tars, self.reps, self.envs, self.excs, self.otherwise, self.flags))
+        return iter((
+            self.rule,
+            self.tars,
+            self.reps,
+            self.envs,
+            self.excs,
+            self.otherwise,
+            self.flags
+        ))
 
     def apply(self, word):
         '''Apply the sound change rule to a single word.
@@ -673,7 +681,7 @@ def compile_rule(rule, cats=None):
     flags = parse_flags(flags)
     if len(reps) < len(tars):  # If reps is shorter than tars, repeat reps until it isn't
         reps *= ceil(len(tars)/len(reps))
-    return Rule(_rule, tars, reps, envs, excs, otherwise, flags)
+    return Rule(tars, reps, envs, excs, otherwise, flags, _rule)
 
 def parse_tars(tars, cats=None):
     '''Parse the targets of a sound change rule.
