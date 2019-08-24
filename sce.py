@@ -783,9 +783,9 @@ def makeBlock(ruleset, start=None, num=None, defs=None):
             elif name == 'rule':
                 block.extend(defs[arg])
     if start is None:
-        return _block
+        return block
     else:
-        return _block, i, defs
+        return block, i, defs
 
 def compileRuleset(ruleset, cats=None):
     if isinstance(ruleset, str):
