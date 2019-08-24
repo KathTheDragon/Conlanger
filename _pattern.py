@@ -430,7 +430,7 @@ def parse_pattern(pattern, cats=None):
     try:
         return compile_tokens(tokenise(pattern), cats)
     except CompilerError as e:
-        raise FormatError(f'invalid pattern: {pattern}; {e.args[0]}')
+        raise FormatError(f'invalid pattern: {pattern!r}; {e.args[0]}')
 
 def parse_patterns(patterns, cats=None):
     '''Parses generation patterns.
