@@ -278,28 +278,26 @@ class Rule:
         # Get all target matches, filtered by given indices
         logger.debug('Begin matching targets')
         matches = []
-        for i, tar in enumerate(self.tars):
-            if isinstance(tar, tuple):
-                tar, indices = tar
-            elif isinstance(tar, list):
-                tar, indices = tar, ()
+        for i, target in enumerate(self.tars):
+            logger.debug(f'> Matching `{target}`')
+            if target:
+                pattern, indices = target
             else:
-                tar, indices = [], ()
-            logger.debug(f'> Matching `{tar}@{indices}`')
-            if not tar:  # All pos's
+                pattern, indices = [], None
+            if not pattern:  # All pos's
                 logger.debug(f'>> Null target matched all positions in range 1..{len(word)}')
                 _matches = [(pos, pos, [], i) for pos in range(1, len(word))]
             else:
                 _matches = []
                 for pos in range(1, len(word)):  # Find all matches
-                    match, rpos, catixes = word.match_pattern(tar, pos)
-                    if match:  # tar matches at pos
+                    match, rpos, catixes = word.match_pattern(pattern, pos)
+                    if match:  # pattern matches at pos
                         logger.debug(f'>> Target matched `{word[pos:rpos]}` at {pos}')
                         _matches.append((pos, rpos, catixes, i))
                 if not _matches:
                     logger.debug('>> No matches for this target')
             # Filter only those matches selected by the given indices
-            if not indices:
+            if indices is None:
                 matches += _matches
             elif _matches:
                 matches += [_matches[ix] for ix in indices if -len(_matches) <= ix < len(_matches)]
@@ -315,23 +313,24 @@ class Rule:
             logger.debug(f'> Checking match at {matches[i][0]}')
             check = self.check_match(matches[i], word)
             if not check:
+                logger.debug(f'>> Match at {matches[i][0]} failed')
                 del matches[i]
             else:
                 # Find the correct replacement
                 logger.debug('>> Get replacement for this match')
-                if check == 1:
-                    reps.append(self.reps[matches[i][3]])
-                    logger.debug(f'>>> Found {self.reps[matches[i][3]]}')
+                rule = self
+                for j in range(check-1):
+                    rule = rule.otherwise
+                _reps = rule.reps
+                if isinstance(_reps, tuple):  # Copy/move
+                    reps.append((_reps[0], _reps[1][matches[i][3]]))
                 else:
-                    otherwise = self.otherwise
-                    for j in range(check-2):
-                        otherwise = otherwise.otherwise
-                    reps.append(otherwise.reps[matches[i][3]])
-                    logger.debug(f'>>> Found {otherwise.reps[matches[i][3]]}')
-        reps.reverse()
+                    reps.append(_reps[matches[i][3]])
+                logger.debug(f'>>> Found {reps[-1]}')
         if not reps:
             logger.debug('No matches matched environment')
             raise RuleFailed
+        reps.reverse()
         matches = sorted(zip(matches, reps), reverse=True)
         # Filter overlaps
         logger.debug('Filter out overlapping matches')
@@ -367,7 +366,7 @@ class Rule:
             logger.debug('>> Matched an environment, check succeeded')
             return 1
         elif self.excs:  # Are there exceptions?
-            logger.debug('>> Environments and exceptions don\'t match, check failed')
+            logger.debug('>> Environments and exceptions both don\'t match, check failed')
             return 0
         else:
             logger.debug('>> Environment doesn\'t match, check "else" rule')
