@@ -43,8 +43,6 @@ import logging.config
 import os.path
 import re
 from dataclasses import dataclass, InitVar
-from math import ceil
-from random import randint
 from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parse_cats, split, partition
 from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compile_tokens as compilePattern
 
@@ -391,6 +389,7 @@ class RuleBlock(list):
         list.__init__(self, ruleset)
 
     def apply(self, word):
+        from random import randint
         applied = False
         rules = []  # We use a list to store rules, since they may be applied multiple times
         values = []  # We have a parallel list for storing the values of the 'for' flag per rule
@@ -722,6 +721,7 @@ FIELD_MARKERS = {
 }
 
 def compileRule(line, linenum=0, cats=None):
+    from math import ceil
     if isinstance(line, str):
         tokens = list(tokeniseRule(line, linenum))
     else:
@@ -964,6 +964,7 @@ def compile_rule(rule, cats=None):
         rule -- the rule as a string (str)
         cats -- dictionary of categories used to interpret the rule (dict)
     '''
+    from math import ceil
     _rule = rule
     for regex in regexes[:-1]:  # Various whitespace manipulations
         rule = regex.sub(r'\1', rule)
