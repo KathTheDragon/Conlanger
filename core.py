@@ -178,6 +178,7 @@ class Word:
                     continue
                 elif not (phone == '#' and phones and phones[-1] == '#'):
                     phones.append(phone)
+            self.phones = phones
 
     @memoisedproperty
     def syllables(self):
