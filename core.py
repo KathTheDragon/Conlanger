@@ -120,6 +120,9 @@ class Cat:
     def __lt__(self, cat):
         return self <= cat and self != cat
 
+    def index(self, item):
+        return self.values.index(item)
+
     @staticmethod
     def make(string, cats=None, name=None):
         if not (string.startswith('[') and string.endswith(']')):
