@@ -217,7 +217,9 @@ class Word:
     def __add__(self, other):
         graphs = self.graphs
         if isinstance(other, Word):
-            if graphs is None:
+            if graphs == other.graphs:
+                pass
+            elif graphs is None:
                 graphs = other.graphs
             elif other.graphs is not None:
                 graphs += other.graphs[1:]
