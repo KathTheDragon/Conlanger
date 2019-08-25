@@ -308,27 +308,23 @@ class Word:
 
         Returns a bool
         '''
-        if isinstance(env, tuple):
+        from .sce import GlobalEnvironment, LocalEnvironment
+        if isinstance(env, list):
             return all(self.match_env(e, pos, rpos) for e in env)
-        env = env.copy()
-        tar = self[pos:rpos]
-        if len(env) == 0:  # Blank environment
+        elif env is None:  # Blank environment
             return True
-        elif len(env) == 1:  # Global environment
-            env = env[0]
-            if isinstance(env, tuple):
-                env = (resolve_target_reference(env[0], tar), env[1])
-            else:
-                env = resolve_target_reference(env, tar)
+        env = env.resolveTargetRef(self[pos:rpos])
+        if isinstance(env, GlobalEnvironment):
             return env in self
         # Local environment
-        left, right = resolve_target_reference(env[0], tar), resolve_target_reference(env[1], tar)
-        if pos:
-            matchleft = self.match_pattern(left, 0, pos, -1)[0]
-        else:  # At the left edge, which can only be matched by a null env
-            matchleft = False if left else True
-        matchright = self.match_pattern(right, rpos)[0]
-        return matchleft and matchright
+        elif isinstance(env, LocalEnvironment):
+            left, right = env
+            if pos:
+                matchleft = self.match_pattern(left, 0, pos, -1)[0]
+            else:  # At the left edge, which can only be matched by a null env
+                matchleft = False if left else True
+            matchright = self.match_pattern(right, rpos)[0]
+            return matchleft and matchright
 
     def apply_match(self, match, rep):
         '''Apply a replacement to a word
