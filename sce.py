@@ -1223,7 +1223,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
         if isinstance(rule, str) and '>' not in rule and '=' in rule and rule.startswith('graphs'):
             cats['graphs'] = Cat.make(rule.split('=')[1].strip(), cats)
     wordset = parse_wordset(wordset, cats, syllabifier)
-    ruleset = compile_ruleset(ruleset, cats)
+    ruleset = compileRuleset(ruleset, cats)
     for line in wordset:
         if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
             logger.info(f'This word: {line[0]}')
