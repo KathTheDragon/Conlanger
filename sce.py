@@ -130,7 +130,7 @@ class Target:
     def __str__(self):
         if self.indices is None:
             return str(self.pattern)
-        elif not self.tars:
+        elif not self.pattern:
             return f'@{self.indices}'
         else:
             return f'{self.pattern}@{self.indices}'
@@ -176,7 +176,7 @@ class GlobalEnvironment:
     def __str__(self):
         if self.indices is None:
             return str(self.pattern)
-        elif not self.tars:
+        elif not self.pattern:
             return f'@{self.indices}'
         else:
             return f'{self.pattern}@{self.indices}'
