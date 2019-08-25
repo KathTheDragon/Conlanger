@@ -45,7 +45,7 @@ import re
 from dataclasses import dataclass, InitVar
 from math import ceil
 from random import randint
-from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, parse_cats, split, partition
+from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parse_cats, split, partition
 from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compile_tokens as compilePattern
 
 # == Constants == #
@@ -139,6 +139,9 @@ class Target:
         yield self.pattern
         yield self.indices
 
+    def copy(self):
+        return Target(self.pattern.copy(), self.indices.copy())
+
 @dataclass
 class Replacement:
     pattern: list
@@ -148,6 +151,12 @@ class Replacement:
 
     def __iter__(self):
         yield self.pattern
+
+    def copy(self):
+        return Replacement(self.pattern.copy())
+
+    def resolveTargetRef(self, target):
+        return Replacement(resolveTargetRef(self.pattern, target))
 
 @dataclass
 class LocalEnvironment:
@@ -168,6 +177,12 @@ class LocalEnvironment:
         yield self.left
         yield self.right
 
+    def copy(self):
+        return LocalEnvironment(self.left.copy(), self.right.copy())
+
+    def resolveTargetRef(self, target):
+        return LocalEnvironment(resolveTargetRef(self.left, target), resolveTargetRef(self.right, target))
+
 @dataclass
 class GlobalEnvironment:
     pattern: list
@@ -184,6 +199,18 @@ class GlobalEnvironment:
     def __iter__(self):
         yield self.pattern
         yield self.indices
+
+    def copy(self):
+        if self.indices is not None:
+            return GlobalEnvironment(self.pattern.copy(), self.indices.copy())
+        else:
+            return GlobalEnvironment(self.pattern.copy())
+
+    def resolveTargetRef(self, target):
+        if self.indices is not None:
+            return GlobalEnvironment(resolveTargetRef(self.pattern, target), self.indices.copy())
+        else:
+            return GlobalEnvironment(resolveTargetRef(self.pattern, target))
 
 @dataclass
 class Flags:
