@@ -10,7 +10,7 @@ Classes:
     Syllabifier -- syllabifies a word based on phonotactics
 
 Functions:
-    resolve_target_reference -- substitutes a target into a pattern list
+    resolveTargetRef -- substitutes a target into a pattern list
     slice_indices -- returns absolute indices for slice indices on an iterable
     parse_cats    -- parses a set of categories
     parse_word    -- parses a string of graphemes
@@ -500,12 +500,14 @@ class Syllabifier:
         return tuple(breaks)
 
 # == Functions == #
-def resolve_target_reference(pattern, tar):
-    pattern = pattern.copy()
-    for i, token in reversed(list(enumerate(pattern))):
+def resolveTargetRef(pattern, target):
+    _pattern = []
+    for token in pattern:
         if token.type == 'TargetRef':
-            pattern[i:i+1] = token.resolve_target(tar)
-    return pattern
+            _pattern.extend(token.resolve_target(target))
+        else:
+            _pattern.append(token)
+    return _pattern
 
 def slice_indices(iter, start=None, end=None):
     '''Calculate absolute indices from slice indices on an iterable.
