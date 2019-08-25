@@ -195,9 +195,9 @@ class Word:
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return Word(list.__getitem__(self, item), self.graphs, self.syllabifier)
+            return Word(self.phones[item], self.graphs, self.syllabifier)
         else:
-            return list.__getitem__(self, item)
+            return self.phones[item]
 
     def __iter__(self):
         yield from self.phones
@@ -208,7 +208,7 @@ class Word:
         elif isinstance(item, tuple) and isinstance(item[0], (list, Word)):
             return any(self.match_pattern(item[0], index)[0] for index in item[1])
         else:
-            return list.__contains__(self, item)
+            return item in self.phones
 
     def __add__(self, other):
         graphs = self.graphs
