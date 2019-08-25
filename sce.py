@@ -136,7 +136,8 @@ class Target:
             return f'{self.pattern}@{self.indices}'
 
     def __iter__(self):
-        return iter((self.pattern, self.indices))
+        yield self.pattern
+        yield self.indices
 
 @dataclass
 class Replacement:
@@ -146,7 +147,7 @@ class Replacement:
         return str(self.pattern)
 
     def __iter__(self):
-        return iter((self.pattern, self.indices))
+        yield self.pattern
 
 @dataclass
 class LocalEnvironment:
@@ -164,7 +165,8 @@ class LocalEnvironment:
             return '_'
 
     def __iter__(self):
-        return iter((self.left, self.right))
+        yield self.left
+        yield self.right
 
 @dataclass
 class GlobalEnvironment:
@@ -180,7 +182,8 @@ class GlobalEnvironment:
             return f'{self.pattern}@{self.indices}'
 
     def __iter__(self):
-        return iter((self.pattern, self.indices))
+        yield self.pattern
+        yield self.indices
 
 @dataclass
 class Flags:
@@ -227,15 +230,13 @@ class Rule:
         return self[1:] == other[1:]
 
     def __iter__(self):
-        return iter((
-            self.tars,
-            self.reps,
-            self.envs,
-            self.excs,
-            self.otherwise,
-            self.flags,
-            self.rule,
-        ))
+        yield self.tars
+        yield self.reps
+        yield self.envs
+        yield self.excs
+        yield self.otherwise
+        yield self.flags
+        yield self.rule
 
     def apply(self, word):
         '''Apply the sound change rule to a single word.

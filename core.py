@@ -78,7 +78,8 @@ class Token:
     column: int
 
     def __iter__(self):
-        return iter((self.type, self.value))
+        yield self.type
+        yield self.value
 
 @dataclass
 class Cat:
@@ -195,7 +196,7 @@ class Word:
             return list.__getitem__(self, item)
 
     def __iter__(self):
-        return iter(self.phones)
+        yield from self.phones
 
     def __contains__(self, item):
         if isinstance(item, (list, Word)):
