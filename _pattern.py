@@ -335,7 +335,7 @@ def tokenise(string, colstart=None, linenum=0):
         nested = True
     if not string:
         if nested:
-            yield Token('END', '', colstart)
+            yield Token('END', '', linenum, colstart)
         return
     brackets = []
     for match in TOKEN_REGEX.finditer(string, colstart):
