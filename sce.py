@@ -275,7 +275,6 @@ class Rule:
         Raises WordUnchanged if the word was not changed by the rule.
         '''
         logger.debug(f'This rule: `{self}`')
-        phones = tuple(word)
         # Get all target matches, filtered by given indices
         logger.debug('Begin matching targets')
         matches = []
@@ -352,6 +351,7 @@ class Rule:
                     logger.debug(f'>> Match at {matches[i][0][0]} overlaps match at {matches[i+1][0][0]}')
                     del matches[i]
         logger.debug(f'Applying matches to `{word}`')
+        phones = tuple(word)
         for match, rep in matches:
             logger.debug(f'> Changing `{list(word[match[0]:match[1]])}` to `{rep}` at {match[0]}')
             word = word.apply_match(match, rep)
