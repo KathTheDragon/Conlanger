@@ -342,6 +342,7 @@ def tokenise(string, colstart=None, linenum=0):
         type = match.lastgroup
         value = match.group()
         column = match.start()
+        colstart = match.end()
         if type == 'COMMA':
             if not (brackets and brackets[-1] == '['):
                 if not brackets and nested:
@@ -366,7 +367,7 @@ def tokenise(string, colstart=None, linenum=0):
                 raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
     if nested:
-        yield Token('END', '', linenum, match.end())
+        yield Token('END', '', linenum, colstart)
 
 def match_brackets(tokens, start=0):
     if tokens[start].type not in ('LOPT', 'LCAT'):
