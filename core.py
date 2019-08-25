@@ -170,7 +170,7 @@ class Word:
 
     def __post_init__(self, lexeme):
         if isinstance(lexeme, str):
-            self.phones = parse_word(f' {lexeme} ', graphs)
+            self.phones = parse_word(f' {lexeme} ', self.graphs)
         else:
             phones = []
             for i, phone in enumerate(lexeme):
