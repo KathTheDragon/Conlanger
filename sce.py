@@ -699,11 +699,13 @@ def compileEnvironments(tokens, cats=None, reduceindices=True):
         for pattern, sep in partition(environment, sep_func=(lambda t: t.type == 'AND'), yield_sep=True):
             if not pattern:
                 raise TokenError('unexpected comma', sep)
-            _env = list(partition(pattern, sep_func=(lambda t: t.type == 'PLACEHOLDER')))
-            if len(_env) == 2:
-                left, right = _env
-                _environment.append(LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats)))
-            else:
+            patterns = list(partition(pattern, sep_func=(lambda t: t.type == 'PLACEHOLDER')))
+            if len(patterns) == 2:
+                left, right = patterns
+                env = LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats))
+                if not env.left and not env.right:
+                    env = None
+            elif len(patterns) == 1:
                 if pattern[-1].type == 'INDICES':
                     if reduceindices:
                         indices = [int(index)-(1 if int(index)>0 else 0) for index in pattern[-1].value.split('|')]
@@ -712,7 +714,10 @@ def compileEnvironments(tokens, cats=None, reduceindices=True):
                     pattern = pattern[:-1]
                 else:
                     indices = None
-                _environment.append(GlobalEnvironment(compilePattern(pattern, cats), indices))
+                env = GlobalEnvironment(compilePattern(pattern, cats), indices)
+                if not env.pattern and env.indices is None:
+                    env = None
+            _environment.append(env)
         environments.append(_environment)
     return environments
 
