@@ -652,7 +652,8 @@ def compileTargets(tokens, cats=None):
         if pattern[-1].type == 'INDICES':
             if type == 'REPLACEMENT':
                 raise TokenError('indices not allowed in replacement field', pattern[-1])
-            pattern, indices = pattern[:-1], [int(index) for index in pattern[-1].value.split('|')]
+            indices = [int(index)-(1 if int(index)>0 else 0) for index in pattern[-1].value.split('|')]
+            pattern = pattern[:-1]
         else:
             indices = None
         targets.append(Target(compilePattern(pattern, cats), indices))
@@ -666,7 +667,7 @@ def compileReplacements(tokens, cats=None):
         raise TokenError('invalid comma', tokens[-1])
     type = tokens[0].type.lower()
     if type in ('move', 'copy'):
-        replacements = compileEnvironments(tokens, cats)
+        replacements = compileEnvironments(tokens, cats, reduceindices=False)
         # Space for sanity-checking the environments - in particular, global envs must have no pattern
         return (type, replacements)
     else:
@@ -675,13 +676,15 @@ def compileReplacements(tokens, cats=None):
             targets = []
             for i, replacement in enumerate(replacements):
                 pattern, indices = replacement
+                if indices is not None:
+                    indices = [int(index)+(1 if int(index)>=0 else 0) for index in indices]
                 targets.append(Target([], indices))
                 replacements[i] = Replacement(pattern)
-            return (indices, replacements)
+            return targets, replacements
         else:
             return [Replacement(r.pattern) for r in replacements]
 
-def compileEnvironments(tokens, cats=None):
+def compileEnvironments(tokens, cats=None, reduceindices=True):
     environments = []
     if not tokens:
         return []
@@ -702,7 +705,11 @@ def compileEnvironments(tokens, cats=None):
                 _environment.append(LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats)))
             else:
                 if pattern[-1].type == 'INDICES':
-                    pattern, indices = pattern[:-1], [int(index) for index in pattern[-1].value.split('|')]
+                    if reduceindices:
+                        indices = [int(index)-(1 if int(index)>0 else 0) for index in pattern[-1].value.split('|')]
+                    else:
+                        indices = [int(index) for index in pattern[-1].value.split('|')]
+                    pattern = pattern[:-1]
                 else:
                     indices = None
                 _environment.append(GlobalEnvironment(compilePattern(pattern, cats), indices))
