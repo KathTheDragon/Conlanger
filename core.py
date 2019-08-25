@@ -611,10 +611,10 @@ def unparse_word(wordin, graphs=None):
     word = test = ''
     if graphs is None:
         separator = ''
-        word = ''.join(wordin)
-        wordin = []
-    separator = graphs[0]
-    polygraphs = [graph for graph in graphs if len(graph) > 1]
+        polygraphs = []
+    else:
+        separator = graphs[0]
+        polygraphs = [graph for graph in graphs if len(graph) > 1]
     if not polygraphs:
         word = ''.join(wordin)
         wordin = []
