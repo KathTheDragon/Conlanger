@@ -56,11 +56,11 @@ RULE_TOKENS = {
     'EPENTHESIS': r'^\+ ?',
     'DELETION': r'^\- ?',
     'TARGET': r'^',
-    'MOVE': r'>\^\?| >\^\? ',
-    'COPY': r'>\^| >\^ ',
-    'REPLACEMENT': r'>| > ',
-    'ENVIRONMENT': r'/| / ',
-    'EXCEPTION': r'!| ! ',
+    'MOVE': r'>\^\?| +>\^\? ',
+    'COPY': r'>\^| +>\^ ',
+    'REPLACEMENT': r'>| +> ',
+    'ENVIRONMENT': r'/| +/ ',
+    'EXCEPTION': r'!| +! ',
     'OR': r', ?',
     'AND': r'&| & ',
     'PLACEHOLDER': r'_',
@@ -105,7 +105,7 @@ FLAG_TOKENS = {
 FLAG_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in FLAG_TOKENS.items()))
 CATEGORY_TOKENS = {
     'CATEGORY': r'^\w+',
-    'OP': r'(?:\+|\-)?=| (?:\+|\-)?= ',
+    'OP': r'(?:\+|\-)?=| +(?:\+|\-)?= ',
     'VALUES': r'.+$',  # Might make this part more precise
     'UNKNOWN': r'.',
 }
