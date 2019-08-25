@@ -320,10 +320,11 @@ class Rule:
                 for j in range(check-1):
                     rule = rule.otherwise
                 _reps = rule.reps
+                match = matches[i][3]
                 if isinstance(_reps, tuple):  # Copy/move
-                    reps.append((_reps[0], _reps[1][matches[i][3]]))
+                    reps.append((_reps[0], _reps[1][match%len(_reps[1])]))
                 else:
-                    reps.append(_reps[matches[i][3]])
+                    reps.append(_reps[match%len(_reps)])
                 logger.debug(f'>>> Found {reps[-1]}')
         if not reps:
             logger.debug('No matches matched environment')
