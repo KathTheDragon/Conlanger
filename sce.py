@@ -53,8 +53,8 @@ MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__), 'logging.conf'))
 RULE_TOKENS = {
-    'EPENTHESIS': r'^\+',
-    'DELETION': r'^\-',
+    'EPENTHESIS': r'^\+ ?',
+    'DELETION': r'^\- ?',
     'TARGET': r'^',
     'MOVE': r'>\^\?| >\^\? ',
     'COPY': r'>\^| >\^ ',
