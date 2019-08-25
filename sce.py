@@ -563,7 +563,7 @@ def tokeniseMetarule(line, linenum=0):
             yield from tokeniseFlags(line, linenum, match.end())
             break
         elif type == 'UNKNOWN':
-            raise CompilerError(f'unexpected character', value, linenum, column)
+            raise CompilerError('unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
 
 def compileMetarule(line, linenum=0):
