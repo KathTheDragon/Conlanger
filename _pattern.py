@@ -54,7 +54,7 @@ TOKENS = {
     'TARGETREF': r'%|<',
     'DITTO': r'\"',
     'SYLBREAK': r'\$',
-    'TEXT': r'([^\W_]|#)+',
+    'TEXT': r'[^ >\/!+\-[\](){}*?\\"%<$^,&_~@]+',
     'UNKNOWN': r'.',
 }
 TOKEN_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in TOKENS.items()))
