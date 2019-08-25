@@ -20,6 +20,8 @@ Functions:
 === Bug-fixes ===
 
 === Implementation ===
+Maybe change >^ and >^? to >> and >>?
+Reserve category `separator`, remove separator from `graphs`
 
 === Features ===
 Is it possible to implement a>b>c as notation for a chain shift?

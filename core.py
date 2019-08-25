@@ -21,11 +21,10 @@ Functions:
 
 === Implementation ===
 Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
-Regex parser
 
 === Features ===
 Something something punctuation
-Escape sequences
+Hijack global environments with no pattern to test for position in word
 
 === Style ===
 Consider where to raise/handle exceptions
