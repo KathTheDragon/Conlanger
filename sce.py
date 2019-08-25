@@ -783,7 +783,7 @@ def compileRule(line, linenum=0, cats=None):
     fields['envs'] = compileEnvironments(fields.get('envs', []), cats) or [[]]
     fields['excs'] = compileEnvironments(fields.get('excs', []), cats)
     # Handle indexed epenthesis
-    if isinstance(fields['reps'], tuple) and isinstance(fields['reps'][0], list):  # Indexed epenthesis
+    if isinstance(fields['reps'], tuple) and not isinstance(fields['reps'][0], str):  # Indexed epenthesis
         fields['tars'], fields['reps'] = fields['reps']
     return Rule(**fields)
 
