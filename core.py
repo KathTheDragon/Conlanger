@@ -336,44 +336,53 @@ class Word:
 
         Returns a Word.
         '''
+        from .sce import Replacement, LocalEnvironment, GlobalEnvironment
         pos, rpos, catixes = match[:3]
-        tar = self[pos:rpos]
-        if isinstance(rep, list):  # Replacement
-            rep = resolve_target_reference(rep, tar)
-            # Resolve tokens
+        if not rep:
+            return self[:pos] + self[rpos:]
+        target = self[pos:rpos]
+        if isinstance(rep, Replacement):
+            _rep = []
             ix = 0
-            for i, token in enumerate(rep):
-                if token.type == 'Grapheme':
-                    rep[i] = token.grapheme
-                elif token.type == 'Category':
+            for element in rep.resolveTargetRef(target).pattern:
+                if element.type == 'Grapheme':
+                    _rep.append(element.grapheme)
+                elif element.type == 'Category':
                     if not catixes:
                         raise RuleError('replacement contains a category but target did not')
-                    cat = token.cat
-                    rep[i] = cat[catixes[ix] % len(cat)]
+                    cat = element.cat
+                    _rep.append(cat[catixes[ix] % len(cat)])
                     ix = (ix + 1) % len(catixes)
-                elif token.type == 'Ditto':
-                    rep[i] = rep[i-1] if i != 0 else self[pos-1]
+                elif element.type == 'Ditto':
+                    _rep.append(rep[-1] if _rep else self[pos-1])
                 else:
-                    rep[i] = ''
-            word = Word(list(self[:pos]) + rep + list(self[rpos:]), self.graphs, self.syllabifier)
-        else:  # Movement
-            if isinstance(rep[1], list):  # Environment
-                mode, envs = rep
-                matches = []
-                for wpos in range(1, len(self)):  # Find all matches
-                    if any(self.match_env(env, wpos, wpos) for env in envs):
-                        if mode == 'move' and wpos >= rpos:  # We'll need to adjust the matches down
-                            wpos -= rpos-pos
-                        matches.append(wpos)
-            else:  # Indices
-                mode, matches = rep[0:2]
-            if mode == 'move':  # Move - delete original tar
+                    _rep.append('')
+            return self[:pos] + _rep + self[rpos:]
+        elif isinstance(rep, tuple) and isinstance(rep[1], list):  # Copy/Move
+            mode, envs = rep
+            matches = []
+            for env in envs:  # Each anded environment contributes destinations
+                if isinstance(env, LocalEnvironment):
+                    env = env.resolveTargetRef(target)
+                    for wpos in range(1, len(self)):  # Find all matches
+                        if self.match_env(env, wpos, wpos):
+                            if mode == 'move' and wpos >= rpos:  # We'll need to adjust the matches down
+                                wpos -= rpos-pos
+                            matches.append(wpos)
+                elif isinstance(env, GlobalEnvironment):  # Indices
+                    if env.pattern:
+                        raise RuleError(f'global environment as destination must have no pattern: {rep}')
+                    matches.extend(env.indices)
+                else:
+                    raise RuleError(f'unknown environment: {rep}')
+            if mode == 'move':  # Move - delete original target
                 word = self[:pos] + self[rpos:]
             else:
                 word = self[:]
             for match in sorted(matches, reverse=True):
-                word = word[:match] + tar + word[match:]
-        return word
+                return word[:match] + target + word[match:]
+        else:
+            raise RuleError(f'invalid replacement: {rep}')
 
 @dataclass
 class Syllabifier:
