@@ -67,8 +67,7 @@ RULE_TOKENS = {
     # 'ADJACENCY': r'~',
     'INDICES': r'@\-?\d+(?:\|\-?\d+)*',
     'SPACE': r' ',
-    'UNKNOWN': r'.',
-    'END': ''
+    'UNKNOWN': r'.'
 }
 RULE_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in RULE_TOKENS.items()))
 METARULES = [
@@ -761,7 +760,7 @@ def compileRule(line, linenum=0, cats=None):
     i = None
     for j, token in enumerate(tokens):
         type, value = token
-        if type in RULE_TOKENS and type not in ('OR', 'AND', 'PLACEHOLDER', 'INDICES'):
+        if type in FIELD_MARKERS or type == 'END':
             if i is not None:
                 field = FIELD_MARKERS[tokens[i].type]
                 if field in fields:
