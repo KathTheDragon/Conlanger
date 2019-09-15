@@ -45,7 +45,7 @@ import logging.config
 import os.path
 import re
 from dataclasses import dataclass, InitVar
-from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parse_cats, split, partition
+from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parse_cats, split, partitionTokens
 from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compile_tokens as compilePattern
 
 # == Constants == #
@@ -510,7 +510,7 @@ def compileFlags(tokens):
     ternaryflags = ('ditto', 'stop')
     numericflags = {'repeat': MAX_RUNS, 'persist': MAX_RUNS, 'chance': 100}  # Maximum values
     flags = {}
-    for flag, token in partition(tokens, sep_func=(lambda token: token.type == 'SEPARATOR'), yield_sep=True):
+    for flag, token in partitionTokens(tokens, 'SEPARATOR'):
         if not flag:
             raise TokenError('expected flag', token)
         elif flag[0].type == 'NEGATION':
@@ -643,7 +643,7 @@ def compileTargets(tokens, cats=None):
     if tokens[-1].type == 'OR':
         raise TokenError('invalid comma', tokens[-1])
     type = tokens[0].type
-    for pattern, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
+    for pattern, sep in partitionTokens(tokens[1:], 'OR'):
         if not pattern:
             raise TokenError('unexpected comma', sep)
         if pattern[-1].type == 'INDICES':
@@ -687,16 +687,17 @@ def compileEnvironments(tokens, cats=None, reduceindices=True):
         return []
     if tokens[-1].type == 'OR':
         raise TokenError('invalid comma', tokens[-1])
-    for environment, sep in partition(tokens[1:], sep_func=(lambda t: t.type == 'OR'), yield_sep=True):
+    for environment, sep in partitionTokens(tokens[1:], 'OR'):
         if not environment:
             raise TokenError('unexpected comma', sep)
         _environment = []
         if tokens[-1].type == 'AND':
             raise TokenError('invalid and', tokens[-1])
-        for pattern, sep in partition(environment, sep_func=(lambda t: t.type == 'AND'), yield_sep=True):
+        for pattern, sep in partitionTokens(environment, 'AND'):
             if not pattern:
                 raise TokenError('unexpected comma', sep)
-            patterns = list(partition(pattern, sep_func=(lambda t: t.type == 'PLACEHOLDER')))
+            patterns = list(partitionTokens(pattern, 'PLACEHOLDER'))
+            patterns = [pattern for pattern, sep in patterns]
             if len(patterns) == 2:
                 left, right = patterns
                 env = LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats))
