@@ -632,12 +632,7 @@ def tokeniseRule(line, linenum=0):
         elif type == 'UNKNOWN':
             raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
-        for token in tokenisePattern(line, colstart, linenum):
-            if token.type != 'END':
-                yield token
-            else:
-                colstart = token.column
-                break
+        colstart = yield from tokenisePattern(line, colstart, linenum)
     else:
         yield Token('END', '', linenum, colstart)
 

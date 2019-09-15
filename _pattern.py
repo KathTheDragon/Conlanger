@@ -335,7 +335,7 @@ def tokenise(string, colstart=None, linenum=0):
         nested = True
     if not string:
         if nested:
-            yield Token('END', '', linenum, colstart)
+            return colstart
         return
     brackets = []
     for match in TOKEN_REGEX.finditer(string, colstart):
@@ -346,8 +346,7 @@ def tokenise(string, colstart=None, linenum=0):
         if type == 'COMMA':
             if not (brackets and brackets[-1] == '['):
                 if not brackets and nested:
-                    yield Token('END', value, linenum, column)
-                    return
+                    return column
                 raise CompilerError(f'unexpected comma', value, linenum, column)
         elif type in ('LOPT', 'LCAT'):  # Left brackets
             if value == '(' and brackets and brackets[-1] == '[':
@@ -361,13 +360,12 @@ def tokenise(string, colstart=None, linenum=0):
                 raise CompilerError(f'mismatched brackets', value, linenum, column)
         elif type == 'UNKNOWN':
             if nested:
-                yield Token('END', value, linenum, column)
-                return
+                return column
             else:
                 raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
     if nested:
-        yield Token('END', '', linenum, colstart)
+        return colstart
 
 def match_brackets(tokens, start=0):
     if tokens[start].type not in ('LOPT', 'LCAT'):
