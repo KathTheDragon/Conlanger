@@ -684,3 +684,6 @@ def partition(sequence, *, sep=None, sep_func=None, yield_sep=False):
         yield sequence[i:], None
     else:
         yield sequence[i:]
+
+def partitionTokens(tokens, sep=None, yield_sep=True):
+    yield from partition(tokens, sep_func=(lambda token: token.type == sep), yield_sep=yield_sep)
