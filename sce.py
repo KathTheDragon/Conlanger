@@ -697,6 +697,8 @@ def compileEnvironments(tokens, cats=None, reduceindices=True):
             if not pattern:
                 raise TokenError('unexpected comma', sep)
             patterns = list(partitionTokens(pattern, 'PLACEHOLDER'))
+            if len(patterns) > 2:
+                raise TokenError('invalid placeholder', patterns[1][1])
             patterns = [pattern for pattern, sep in patterns]
             if len(patterns) == 2:
                 left, right = patterns
