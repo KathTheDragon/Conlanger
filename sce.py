@@ -55,7 +55,6 @@ __location__ = os.path.realpath(
 RULE_TOKENS = {
     'EPENTHESIS': r'^\+ ?',
     'DELETION': r'^\- ?',
-    'TARGET': r'^',
     'MOVE': r'>\^\?| +>\^\? ',
     'COPY': r'>\^| +>\^ ',
     'REPLACEMENT': r'>| +> ',
@@ -636,7 +635,12 @@ def tokeniseRule(line, linenum=0):
             yield from tokeniseFlags(line, linenum, colstart)
             break
         elif type == 'UNKNOWN':
-            raise CompilerError(f'unexpected character', value, linenum, column)
+            if column == 0:
+                type = 'TARGET'
+                value = ''
+                colstart = 0
+            else:
+                raise CompilerError(f'unexpected character', value, linenum, column)
         yield Token(type, value, linenum, column)
         colstart = yield from tokenisePattern(line, colstart, linenum)
     else:
@@ -735,7 +739,7 @@ def compileRule(line, linenum=0, cats=None):
         line = ''
     if tokens[0].type == 'END':
         tokens = []
-    elif tokens[0].type not in ('EPENTHESIS', 'DELETION', 'TARGET'):
+    elif tokens[0].type not in FIELD_MARKERS:
         raise TokenError('unexpected token', tokens[0])
     fields = {
         'otherwise': None,
