@@ -172,6 +172,9 @@ class LocalEnvironment:
         else:
             return '_'
 
+    def __bool__(self):
+        return bool(self.left or self.right)
+
     def __iter__(self):
         yield self.left
         yield self.right
@@ -194,6 +197,9 @@ class GlobalEnvironment:
             return f'@{self.indices}'
         else:
             return f'{self.pattern}@{self.indices}'
+
+    def __bool__(self):
+        return bool(self.pattern or self.indices)
 
     def __iter__(self):
         yield self.pattern
@@ -636,91 +642,6 @@ def tokeniseRule(line, linenum=0):
     else:
         yield Token('END', '', linenum, colstart)
 
-def compileTargets(tokens, cats=None):
-    targets = []
-    if not tokens:
-        return []
-    if tokens[-1].type == 'OR':
-        raise TokenError('invalid comma', tokens[-1])
-    type = tokens[0].type
-    for pattern, sep in partitionTokens(tokens[1:], 'OR'):
-        if not pattern:
-            raise TokenError('unexpected comma', sep)
-        if pattern[-1].type == 'INDICES':
-            if type == 'REPLACEMENT':
-                raise TokenError('indices not allowed in replacement field', pattern[-1])
-            indices = [int(index)-(1 if int(index)>0 else 0) for index in pattern[-1].value.split('|')]
-            pattern = pattern[:-1]
-        else:
-            indices = None
-        targets.append(Target(compilePattern(pattern, cats), indices))
-    return targets
-
-def compileReplacements(tokens, cats=None):
-    replacements = []
-    if not tokens:
-        return []
-    if tokens[-1].type == 'OR':
-        raise TokenError('invalid comma', tokens[-1])
-    type = tokens[0].type.lower()
-    if type in ('move', 'copy'):
-        replacements = compileEnvironments(tokens, cats, reduceindices=False)
-        # Space for sanity-checking the environments - in particular, global envs must have no pattern
-        return (type, replacements)
-    else:
-        replacements = compileTargets(tokens, cats)  # Necessary because of indexed epenthesis
-        if type == 'epenthesis':
-            targets = []
-            for i, replacement in enumerate(replacements):
-                pattern, indices = replacement
-                if indices is not None:
-                    indices = [int(index)+(1 if int(index)>=0 else 0) for index in indices]
-                targets.append(Target([], indices))
-                replacements[i] = Replacement(pattern)
-            return targets, replacements
-        else:
-            return [Replacement(r.pattern) for r in replacements]
-
-def compileEnvironments(tokens, cats=None, reduceindices=True):
-    environments = []
-    if not tokens:
-        return []
-    if tokens[-1].type == 'OR':
-        raise TokenError('invalid comma', tokens[-1])
-    for environment, sep in partitionTokens(tokens[1:], 'OR'):
-        if not environment:
-            raise TokenError('unexpected comma', sep)
-        _environment = []
-        if tokens[-1].type == 'AND':
-            raise TokenError('invalid and', tokens[-1])
-        for pattern, sep in partitionTokens(environment, 'AND'):
-            if not pattern:
-                raise TokenError('unexpected comma', sep)
-            patterns = list(partitionTokens(pattern, 'PLACEHOLDER'))
-            if len(patterns) > 2:
-                raise TokenError('invalid placeholder', patterns[1][1])
-            patterns = [pattern for pattern, sep in patterns]
-            if len(patterns) == 2:
-                left, right = patterns
-                env = LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats))
-                if not env.left and not env.right:
-                    env = None
-            elif len(patterns) == 1:
-                if pattern[-1].type == 'INDICES':
-                    if reduceindices:
-                        indices = [int(index)-(1 if int(index)>0 else 0) for index in pattern[-1].value.split('|')]
-                    else:
-                        indices = [int(index) for index in pattern[-1].value.split('|')]
-                    pattern = pattern[:-1]
-                else:
-                    indices = None
-                env = GlobalEnvironment(compilePattern(pattern, cats), indices)
-                if not env.pattern and env.indices is None:
-                    env = None
-            _environment.append(env)
-        environments.append(_environment)
-    return environments
-
 FIELD_MARKERS = {
     'EPENTHESIS': 'reps',
     'DELETION': 'tars',
@@ -732,6 +653,79 @@ FIELD_MARKERS = {
     'EXCEPTION': 'excs',
 }
 
+def compileField(tokens, cats=None, delimiter='OR', reduceindices=True):
+    if not tokens:
+        return []
+    if tokens[-1].type == delimiter:
+        raise TokenError('invalid delimiter', tokens[-1])
+    if tokens[0].type in FIELD_MARKERS:
+        fieldmarker = tokens[0].type.lower()
+    else:
+        fieldmarker = ''
+    if fieldmarker in ('target', 'deletion'):
+        _compile = lambda pattern: compileTarget(pattern, cats)
+    elif fieldmarker in ('environment', 'exception'):
+        _compile = lambda pattern: compileField(pattern, cats, 'AND')
+    elif fieldmarker in ('move', 'copy'):
+        _compile = lambda pattern: compileField(pattern, cats, 'AND', False)
+    elif fieldmarker == 'epenthesis':
+        _compile = lambda pattern: compileEpenthesis(pattern, cats)
+    elif fieldmarker == 'replacement':
+        _compile = lambda pattern: compileReplacement(pattern, cats)
+    else:
+        _compile = lambda pattern: compileEnvironment(pattern, cats, reduceindices)
+    field = []
+    if fieldmarker:
+        tokens = tokens[1:]
+    for pattern, sep in partitionTokens(tokens, delimiter):
+        if not pattern:
+            raise TokenError('unexpected delimiter', sep)
+        field.append(_compile(pattern))
+    # Final replacements field handling
+    if fieldmarker in ('move', 'copy'):
+        return fieldmarker, field
+    elif fieldmarker == 'epenthesis':
+        return map(list, zip(*field))
+    return field
+
+def compileIndexedPattern(pattern, cats=None, reduceindices=True):
+    if pattern[-1].type == 'INDICES':
+        indices = [int(index) for index in pattern[-1].value.split('|')]
+        if reduceindices:
+            indices = [index-(1 if index>0 else 0) for index in indices]
+        pattern = pattern[:-1]
+    else:
+        indices = None
+    return compilePattern(pattern, cats), indices
+
+def compileTarget(pattern, cats=None):
+    return Target(*compileIndexedPattern(pattern, cats))
+
+def compileEpenthesis(pattern, cats=None):
+    pattern, indices = compileIndexedPattern(pattern, cats, False)
+    return Target([], indices), Replacement(pattern)
+
+def compileReplacement(pattern, cats=None):
+    pattern, indices = compileIndexedPattern(pattern, cats, False)
+    if indices is not None:
+        raise FormatError('replacement field cannot contain indices')
+    else:
+        return Replacement(pattern)
+
+def compileEnvironment(pattern, cats=None, reduceindices=True):
+    patterns = []
+    for pattern, sep in partitionTokens(pattern, 'PLACEHOLDER'):
+        if sep is not None and patterns:  # Only one placeholder is allowed, which then follows the first pattern
+            raise TokenError('invalid placeholder', sep)
+        patterns.append(pattern)
+    if len(patterns) == 2:
+        left, right = patterns
+        env = LocalEnvironment(compilePattern(left, cats), compilePattern(right, cats))
+    elif len(patterns) == 1:
+        pattern = patterns[0]
+        env = GlobalEnvironment(*compileIndexedPattern(pattern, cats, reduceindices))
+    return env or None
+
 def compileRule(line, linenum=0, cats=None):
     from math import ceil
     if isinstance(line, str):
@@ -739,8 +733,8 @@ def compileRule(line, linenum=0, cats=None):
     else:
         tokens = line
         line = ''
-    if not tokens:
-        return None
+    if tokens[0].type == 'END':
+        tokens = []
     elif tokens[0].type not in ('EPENTHESIS', 'DELETION', 'TARGET'):
         raise TokenError('unexpected token', tokens[0])
     fields = {
@@ -778,12 +772,12 @@ def compileRule(line, linenum=0, cats=None):
         if fields['reps'][0].type == 'EPENTHESIS':
             raise TokenError('target field not allowed with epenthesis', fields['tars'][0])
     # Compile fields
-    fields['tars'] = compileTargets(fields.get('tars', []), cats) or [[]]
-    fields['reps'] = compileReplacements(fields.get('reps', []), cats) or [[]]
-    fields['envs'] = compileEnvironments(fields.get('envs', []), cats) or [[]]
-    fields['excs'] = compileEnvironments(fields.get('excs', []), cats)
+    fields['tars'] = compileField(fields.get('tars', []), cats) or [[]]
+    fields['reps'] = compileField(fields.get('reps', []), cats) or [[]]
+    fields['envs'] = compileField(fields.get('envs', []), cats) or [[]]
+    fields['excs'] = compileField(fields.get('excs', []), cats)
     # Handle indexed epenthesis
-    if isinstance(fields['reps'], tuple) and not isinstance(fields['reps'][0], str):  # Indexed epenthesis
+    if isinstance(fields['reps'], map):  # Epenthesis
         fields['tars'], fields['reps'] = fields['reps']
     return Rule(**fields)
 
