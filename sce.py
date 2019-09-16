@@ -646,52 +646,6 @@ def tokeniseRule(line, linenum=0):
     else:
         yield Token('END', '', linenum, colstart)
 
-FIELD_MARKERS = {
-    'EPENTHESIS': 'reps',
-    'DELETION': 'tars',
-    'TARGET': 'tars',
-    'MOVE': 'reps',
-    'COPY': 'reps',
-    'REPLACEMENT': 'reps',
-    'ENVIRONMENT': 'envs',
-    'EXCEPTION': 'excs',
-}
-
-def compileField(tokens, cats=None, delimiter='OR', reduceindices=True):
-    if not tokens:
-        return []
-    if tokens[-1].type == delimiter:
-        raise TokenError('invalid delimiter', tokens[-1])
-    if tokens[0].type in FIELD_MARKERS:
-        fieldmarker = tokens[0].type.lower()
-    else:
-        fieldmarker = ''
-    if fieldmarker in ('target', 'deletion'):
-        _compile = lambda pattern: compileTarget(pattern, cats)
-    elif fieldmarker in ('environment', 'exception'):
-        _compile = lambda pattern: compileField(pattern, cats, 'AND')
-    elif fieldmarker in ('move', 'copy'):
-        _compile = lambda pattern: compileField(pattern, cats, 'AND', False)
-    elif fieldmarker == 'epenthesis':
-        _compile = lambda pattern: compileEpenthesis(pattern, cats)
-    elif fieldmarker == 'replacement':
-        _compile = lambda pattern: compileReplacement(pattern, cats)
-    else:
-        _compile = lambda pattern: compileEnvironment(pattern, cats, reduceindices)
-    field = []
-    if fieldmarker:
-        tokens = tokens[1:]
-    for pattern, sep in partitionTokens(tokens, delimiter):
-        if not pattern:
-            raise TokenError('unexpected delimiter', sep)
-        field.append(_compile(pattern))
-    # Final replacements field handling
-    if fieldmarker in ('move', 'copy'):
-        return fieldmarker, field
-    elif fieldmarker == 'epenthesis':
-        return map(list, zip(*field))
-    return field
-
 def compileIndexedPattern(pattern, cats=None, reduceindices=True):
     if pattern[-1].type == 'INDICES':
         indices = [int(index) for index in pattern[-1].value.split('|')]
@@ -729,6 +683,49 @@ def compileEnvironment(pattern, cats=None, reduceindices=True):
         pattern = patterns[0]
         env = GlobalEnvironment(*compileIndexedPattern(pattern, cats, reduceindices))
     return env or None
+
+COMPILERS = {
+    'EPENTHESIS': compileEpenthesis,
+    'DELETION': compileTarget,
+    'TARGET': compileTarget,
+    'MOVE': lambda pattern, cats: compileField(pattern, cats, 'AND', False),
+    'COPY': lambda pattern, cats: compileField(pattern, cats, 'AND', False),
+    'REPLACEMENT': compileReplacement,
+    'ENVIRONMENT': lambda pattern, cats: compileField(pattern, cats, 'AND'),
+    'EXCEPTION': lambda pattern, cats: compileField(pattern, cats, 'AND'),
+}
+
+def compileField(tokens, cats=None, delimiter='OR', reduceindices=True):
+    if not tokens:
+        return []
+    if tokens[-1].type == delimiter:
+        raise TokenError('invalid delimiter', tokens[-1])
+    fieldmarker = tokens[0].type
+    _compile = COMPILERS.get(fieldmarker, lambda pattern, cats: compileEnvironment(pattern, cats, reduceindices))
+    if fieldmarker in COMPILERS:
+        tokens = tokens[1:]
+    field = []
+    for pattern, sep in partitionTokens(tokens, delimiter):
+        if not pattern:
+            raise TokenError('unexpected delimiter', sep)
+        field.append(_compile(pattern, cats))
+    # Final replacements field handling
+    if fieldmarker in ('MOVE', 'COPY'):
+        return fieldmarker.lower(), field
+    elif fieldmarker == 'EPENTHESIS':
+        return map(list, zip(*field))
+    return field
+
+FIELD_MARKERS = {
+    'EPENTHESIS': 'reps',
+    'DELETION': 'tars',
+    'TARGET': 'tars',
+    'MOVE': 'reps',
+    'COPY': 'reps',
+    'REPLACEMENT': 'reps',
+    'ENVIRONMENT': 'envs',
+    'EXCEPTION': 'excs',
+}
 
 def compileRule(line, linenum=0, cats=None):
     from math import ceil
