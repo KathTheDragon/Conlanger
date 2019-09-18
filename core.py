@@ -96,7 +96,7 @@ class Cat:
         return self.values[key]
 
     def __iter__(self):
-        return iter(self.values)
+        yield from self.values
 
     def __contains__(self, item):
         return item in self.values
