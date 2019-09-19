@@ -8,12 +8,8 @@ Classes:
     Rule -- represents a sound change rule
 
 Functions:
-    compile_ruleset -- compiles a sound change ruleset
-    compile_rule    -- compiles a sound change rule
-    parse_tars      -- parse the targets of a rule
-    parse_reps      -- parse the replacements of a rule
-    parse_envs      -- parse the environments of a rule
-    parse_flags     -- parse the flags of a rule
+    compileRuleset -- compiles a sound change ruleset
+    compileRule    -- compiles a sound change rule
     run             -- applies a set of sound change rules to a set of words
 ''''''
 ==================================== To-do ====================================
@@ -45,8 +41,8 @@ import logging.config
 import os.path
 import re
 from dataclasses import dataclass, InitVar
-from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parse_cats, split, partitionTokens
-from ._pattern import parse_pattern, escape, tokenise as tokenisePattern, compile_tokens as compilePattern
+from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parseCats, split, partitionTokens
+from ._pattern import tokenise as tokenisePattern, compile as compilePattern
 
 # == Constants == #
 MAX_RUNS = 10**3  # Maximum number of times a rule may be repeated
@@ -241,7 +237,7 @@ class Rule:
 
     Methods:
         apply       -- apply the rule to a word
-        check_match -- check if the match is valid
+        checkMatch -- check if the match is valid
     '''
     tars: list
     reps: list
@@ -294,7 +290,7 @@ class Rule:
             else:
                 _matches = []
                 for pos in range(1, len(word)):  # Find all matches
-                    match, rpos, catixes = word.match_pattern(pattern, pos)
+                    match, rpos, catixes = word.matchPattern(pattern, pos)
                     if match:  # pattern matches at pos
                         logger.debug(f'>> Target matched `{word[pos:rpos]}` at {pos}')
                         _matches.append((pos, rpos, catixes, i))
@@ -315,7 +311,7 @@ class Rule:
         reps = []
         for i in reversed(range(len(matches))):
             logger.debug(f'> Checking match at {matches[i][0]}')
-            check = self.check_match(matches[i], word)
+            check = self.checkMatch(matches[i], word)
             if not check:
                 logger.debug(f'>> Match at {matches[i][0]} failed')
                 del matches[i]
@@ -358,16 +354,16 @@ class Rule:
         phones = tuple(word)
         for match, rep in matches:
             logger.debug(f'> Changing `{list(word[match[0]:match[1]])}` to `{rep}` at {match[0]}')
-            word = word.apply_match(match, rep)
+            word = word.applyMatch(match, rep)
         if phones == tuple(word):
             raise WordUnchanged
         return word
 
-    def check_match(self, match, word):
+    def checkMatch(self, match, word):
         pos, rpos = match[:2]
-        if any(word.match_env(exc, pos, rpos) for exc in self.excs):  # If there are exceptions, does any match?
+        if any(word.matchEnv(exc, pos, rpos) for exc in self.excs):  # If there are exceptions, does any match?
             logger.debug('>> Matched an exception, check the "else" rule')
-        elif any(word.match_env(env, pos, rpos) for env in self.envs):  # Does any environment match?
+        elif any(word.matchEnv(env, pos, rpos) for env in self.envs):  # Does any environment match?
             logger.debug('>> Matched an environment, check succeeded')
             return 1
         elif self.excs:  # Are there exceptions?
@@ -376,7 +372,7 @@ class Rule:
         else:
             logger.debug('>> Environment doesn\'t match, check "else" rule')
         if self.otherwise is not None:  # Try checking otherwise
-            check = self.otherwise.check_match(match, word)
+            check = self.otherwise.checkMatch(match, word)
             return check + (1 if check else 0)
         else:
             logger.debug('>> No "else" rule, check failed')
@@ -436,7 +432,7 @@ class RuleBlock(list):
         return word
 
 # == Functions == #
-def parse_wordset(wordset, cats=None, syllabifier=None):
+def parseWordset(wordset, cats=None, syllabifier=None):
     '''Parses a wordlist.
 
     Arguments:
@@ -859,11 +855,11 @@ def compileRuleset(ruleset, cats=None):
     ruleset = makeBlock(_ruleset)
     return RuleBlock(ruleset)
 
-def setup_logging(filename=__location__, logger_name='sce'):
+def setupLogging(filename=__location__, loggername='sce'):
     global logger
     if filename is not None:
         logging.config.fileConfig(filename)
-    logger = logging.getLogger(logger_name)
+    logger = logging.getLogger(loggername)
 
 def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     '''Applies a set of sound change rules to a set of words.
@@ -879,7 +875,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     '''
     if not ruleset or not wordset:  # One of these is blank so do nothing
         return wordset
-    cats = parse_cats(cats)
+    cats = parseCats(cats)
     # If we didn't get passed a graphs category, check if we can get it from the ruleset
     if 'graphs' not in cats:
         if isinstance(ruleset, str):
@@ -888,7 +884,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
             rule = ruleset[0]
         if isinstance(rule, str) and '>' not in rule and '=' in rule and rule.startswith('graphs'):
             cats['graphs'] = Cat.make(rule.split('=')[1].strip(), cats)
-    wordset = parse_wordset(wordset, cats, syllabifier)
+    wordset = parseWordset(wordset, cats, syllabifier)
     ruleset = compileRuleset(ruleset, cats)
     for line in wordset:
         if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
@@ -908,4 +904,4 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
 apply_ruleset = run
 
 # Setup logging
-setup_logging()
+setupLogging()

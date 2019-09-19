@@ -11,9 +11,9 @@ Classes:
 
 Functions:
     resolveTargetRef -- substitutes a target into a pattern list
-    slice_indices -- returns absolute indices for slice indices on an iterable
-    parse_cats    -- parses a set of categories
-    parse_word    -- parses a string of graphemes
+    sliceIndices -- returns absolute indices for slice indices on an iterable
+    parseCats    -- parses a set of categories
+    parseWord    -- parses a string of graphemes
     split         -- splits a string
 ''''''
 ==================================== To-do ====================================
@@ -59,13 +59,13 @@ class TokenError(CompilerError):
 class memoisedproperty(object):
     def __init__(self, fget):
         self.fget = fget
-        self.func_name = fget.__name__
+        self.funcname = fget.__name__
 
     def __get__(self, obj, cls):
         if obj is None:
             return None
         value = self.fget(obj)
-        setattr(obj, self.func_name, value)
+        setattr(obj, self.funcname, value)
         return value
 
 # == Classes == #
@@ -157,9 +157,9 @@ class Word:
 
     Methods:
         find          -- find a match of a list using pattern notation to the word
-        match_pattern -- match a list using pattern notation to the word
-        match_env     -- match a sound change environment to the word
-        apply_match   -- apply a single match to the word
+        matchPattern -- match a list using pattern notation to the word
+        matchEnv     -- match a sound change environment to the word
+        applyMatch   -- apply a single match to the word
         strip         -- remove leading and trailing graphemes
     '''
     phones: list = field(init=False)
@@ -169,7 +169,7 @@ class Word:
 
     def __post_init__(self, lexeme):
         if isinstance(lexeme, str):
-            self.phones = parse_word(f' {lexeme} ', self.graphs)
+            self.phones = parseWord(f' {lexeme} ', self.graphs)
         else:
             phones = []
             for i, phone in enumerate(lexeme):
@@ -187,7 +187,7 @@ class Word:
         return f'Word({str(self)!r})'
 
     def __str__(self):
-        return unparse_word(self, self.graphs)
+        return unparseWord(self, self.graphs)
 
     def __len__(self):
         return len(self.phones)
@@ -209,7 +209,7 @@ class Word:
             pattern, indices = item
             if indices is None:
                 return self.find(pattern) != -1
-            return any(self.match_pattern(pattern, index)[0] for index in indices)
+            return any(self.matchPattern(pattern, index)[0] for index in indices)
         else:
             return item in self.phones
 
@@ -224,7 +224,7 @@ class Word:
                 graphs += other.graphs[1:]
             other = other.phones
         elif isinstance(other, str):
-            other = parse_word(other, graphs)
+            other = parseWord(other, graphs)
         return Word(self.phones + other, graphs, self.syllabifier)
 
     def __mul__(self, other):
@@ -261,27 +261,27 @@ class Word:
 
         Returns an int
         '''
-        from ._pattern import parse_pattern
-        start, end = slice_indices(self, start, end)
+        from ._pattern import parsePattern
+        start, end = sliceIndices(self, start, end)
         if isinstance(sub, Word):
-            sub = parse_pattern(sub)
+            sub = parsePattern(sub)
         if sub and sub[-1].type == 'Comparison':  # Counting
             matches = 0
             op, count = sub[-1].operation, sub[-1].value
             for pos in range(start, end):
-                match = self.match_pattern(sub[:-1], pos, end)[0]
+                match = self.matchPattern(sub[:-1], pos, end)[0]
                 if match:
                     matches += 1
             if eval(f'matches {op} count'):
                 return 1
         else:
             for pos in range(start, end):
-                match = self.match_pattern(sub, pos, end)[0]
+                match = self.matchPattern(sub, pos, end)[0]
                 if match:
                     return pos
         return -1
 
-    def match_pattern(self, pattern, start=None, end=None, step=1):
+    def matchPattern(self, pattern, start=None, end=None, step=1):
         '''Match a pattern sequence to the word.
 
         Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
@@ -293,11 +293,11 @@ class Word:
 
         Returns a tuple.
         '''
-        from ._pattern import match_pattern
-        start, end = slice_indices(self, start, end)
-        return match_pattern(self, pattern, start, end, step)
+        from ._pattern import matchPattern
+        start, end = sliceIndices(self, start, end)
+        return matchPattern(self, pattern, start, end, step)
 
-    def match_env(self, env, pos=0, rpos=0):  # Test if the env matches the word
+    def matchEnv(self, env, pos=0, rpos=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
 
         Arguments:
@@ -309,7 +309,7 @@ class Word:
         '''
         from .sce import GlobalEnvironment, LocalEnvironment
         if isinstance(env, list):
-            return all(self.match_env(e, pos, rpos) for e in env)
+            return all(self.matchEnv(e, pos, rpos) for e in env)
         elif env is None:  # Blank environment
             return True
         env = env.resolveTargetRef(self[pos:rpos])
@@ -319,13 +319,13 @@ class Word:
         elif isinstance(env, LocalEnvironment):
             left, right = env
             if pos:
-                matchleft = self.match_pattern(left, 0, pos, -1)[0]
+                matchleft = self.matchPattern(left, 0, pos, -1)[0]
             else:  # At the left edge, which can only be matched by a null env
                 matchleft = False if left else True
-            matchright = self.match_pattern(right, rpos)[0]
+            matchright = self.matchPattern(right, rpos)[0]
             return matchleft and matchright
 
-    def apply_match(self, match, rep):
+    def applyMatch(self, match, rep):
         '''Apply a replacement to a word
 
         Arguments:
@@ -364,7 +364,7 @@ class Word:
                 if isinstance(env, LocalEnvironment):
                     env = env.resolveTargetRef(target)
                     for wpos in range(1, len(self)):  # Find all matches
-                        if self.match_env(env, wpos, wpos):
+                        if self.matchEnv(env, wpos, wpos):
                             if mode == 'move' and wpos >= rpos:  # We'll need to adjust the matches down
                                 wpos -= rpos-pos
                             matches.append(wpos)
@@ -388,26 +388,26 @@ class Syllabifier:
     rules: list
 
     def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
-        from ._pattern import parse_patterns
-        onsets = parse_patterns(onsets)
-        nuclei = parse_patterns(nuclei)
-        codas = parse_patterns(codas)
-        margins = parse_patterns(margins)
-        constraints = parse_patterns(constraints)
+        from ._pattern import parsePatterns
+        onsets = parsePatterns(onsets)
+        nuclei = parsePatterns(nuclei)
+        codas = parsePatterns(codas)
+        margins = parsePatterns(margins)
+        constraints = parsePatterns(constraints)
         self.rules = []
         # Generate medial rules - coda + onset + nucleus
-        rules = self.get_non_finals(onsets, nuclei, codas)
+        rules = self.getNonFinals(onsets, nuclei, codas)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         # Generate final rules - coda + right margin
-        rules = self.get_finals(codas, margins)
+        rules = self.getFinals(codas, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         # Generate initial rules - left margin + onset + nucleus
-        rules = self.get_non_finals(onsets, nuclei, margins)
+        rules = self.getNonFinals(onsets, nuclei, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
-        self.rules = [rule for rule in self.rules if self.check_valid(rule[0], constraints)]
+        self.rules = [rule for rule in self.rules if self.checkValid(rule[0], constraints)]
 
     @staticmethod
-    def get_non_finals(onsets, nuclei, codas):
+    def getNonFinals(onsets, nuclei, codas):
         rules = []
         for crank, coda in enumerate(codas):
             if coda[-1] == '#':
@@ -437,7 +437,7 @@ class Syllabifier:
         return rules
 
     @staticmethod
-    def get_finals(codas, margins):
+    def getFinals(codas, margins):
         rules = []
         for mrank, margin in enumerate([margin for margin in margins if margin[-1] == '#']):
             if margin == ['_', '#']:
@@ -455,7 +455,7 @@ class Syllabifier:
         return rules
 
     @staticmethod
-    def check_valid(rule, constraints):
+    def checkValid(rule, constraints):
         for constraint in constraints:
             for rpos in range(len(rule)-len(constraint)):
                 for cpos, ctoken in enumerate(constraint):
@@ -482,7 +482,7 @@ class Syllabifier:
             for rule, _breaks in self.rules:
                 if rule == ['_', '#'] and pos in breaks:
                     continue
-                match, rpos = word.match_pattern(rule, pos)[:2]
+                match, rpos = word.matchPattern(rule, pos)[:2]
                 if match:
                     # Compute and add breaks for this pattern
                     for ix in _breaks:
@@ -503,12 +503,12 @@ def resolveTargetRef(pattern, target):
     _pattern = []
     for token in pattern:
         if token.type == 'TargetRef':
-            _pattern.extend(token.resolve_target(target))
+            _pattern.extend(token.resolveTarget(target))
         else:
             _pattern.append(token)
     return _pattern
 
-def slice_indices(iter, start=None, end=None):
+def sliceIndices(iter, start=None, end=None):
     '''Calculate absolute indices from slice indices on an iterable.
 
     Arguments:
@@ -528,19 +528,19 @@ def slice_indices(iter, start=None, end=None):
         end += len(iter)
     return start, end
 
-def parse_cats(cats, initial_cats=None):
+def parseCats(cats, initialcats=None):
     '''Parses a set of categories.
 
     Arguments:
         cats -- the set of categories to be parsed (str)
-        initial_cats -- prior categories (dict)
+        initialcats -- prior categories (dict)
 
     Returns a dict.
     '''
-    if initial_cats is None:
+    if initialcats is None:
         _cats = {}
     else:
-        _cats = initial_cats.copy()
+        _cats = initialcats.copy()
     if isinstance(cats, str):
         cats = cats.splitlines()
     if isinstance(cats, list):
@@ -572,7 +572,7 @@ def parse_cats(cats, initial_cats=None):
 
 WHITESPACE_REGEX = re.compile(r'\s+')
 
-def parse_word(word, graphs=None):
+def parseWord(word, graphs=None):
     '''Parse a string of graphemes.
 
     Arguments:
@@ -606,7 +606,7 @@ def parse_word(word, graphs=None):
                     break
     return graphemes
 
-def unparse_word(wordin, graphs=None):
+def unparseWord(wordin, graphs=None):
     word = test = ''
     if graphs is None:
         separator = ''
@@ -667,23 +667,23 @@ def split(string, sep=None, nesting=None, minimal=False):
             break
     return result
 
-def partition(sequence, *, sep=None, sep_func=None, yield_sep=False):
-    if sep is None == sep_func is None:
-        raise ValueError('exactly one of separator and separator_func must be given')
+def partition(sequence, *, sep=None, sepfunc=None, yieldsep=False):
+    if sep is None == sepfunc is None:
+        raise ValueError('exactly one of sep and sepfunc must be given')
     if sep is not None:
-        sep_func = lambda item: item == sep
+        sepfunc = lambda item: item == sep
     i = 0
     for j, item in enumerate(sequence):
-        if sep_func(item):
-            if yield_sep:
+        if sepfunc(item):
+            if yieldsep:
                 yield (sequence[i:j], sequence[j])
             else:
                 yield sequence[i:j]
             i = j+1
-    if yield_sep:
+    if yieldsep:
         yield sequence[i:], None
     else:
         yield sequence[i:]
 
-def partitionTokens(tokens, sep=None, yield_sep=True):
-    yield from partition(tokens, sep_func=(lambda token: token.type == sep), yield_sep=yield_sep)
+def partitionTokens(tokens, sep=None, yieldsep=True):
+    yield from partition(tokens, sepfunc=(lambda token: token.type == sep), yieldsep=yieldsep)

@@ -16,16 +16,16 @@ Classes:
 Functions:
     escape         -- processes escaped characters in a string
     tokenise       -- returns a generator producing tokens
-    parse_pattern  -- parses a string utilising pattern notation into a list of elements
-    parse_patterns -- parses a collection of strings using pattern notation
-    match_pattern  -- matches a list of elements to a specified slice of a word
+    parsePattern  -- parses a string utilising pattern notation into a list of elements
+    parsePatterns -- parses a collection of strings using pattern notation
+    matchPattern  -- matches a list of elements to a specified slice of a word
 ''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
-catixes in match_pattern should be redone to cope with non-linearity
+catixes in matchPattern should be redone to cope with non-linearity
 
 === Implementation ===
-Replace super-disgusting hacky wildcard repetition workaround in match_pattern with something better
+Replace super-disgusting hacky wildcard repetition workaround in matchPattern with something better
 - How though
 Handling of optionals needs a lot of work
 
@@ -242,7 +242,7 @@ class Optional(Element):
     @staticmethod
     def make(string, cats=None):
         greedy = not string.endswith('?')
-        pattern = parse_pattern(string.rstrip('?')[1:-1], cats)
+        pattern = parsePattern(string.rstrip('?')[1:-1], cats)
         if len(pattern) == 1 and isinstance(pattern[0], Wildcard):
             pattern[0].greedy = greedy
         return Optional(greedy=greedy, pattern=pattern)
@@ -256,7 +256,7 @@ class Optional(Element):
         if tokens[0].type != 'LOPT' or tokens[-1].type != 'ROPT':
             raise FormatError(f'the given tokens are not a valid optional: {tokens}')
         greedy = not tokens[-1].value.endswith('?')
-        pattern = compile_tokens(tokens[1:-1], cats)
+        pattern = compile(tokens[1:-1], cats)
         if len(pattern) == 1 and isinstance(pattern[0], Wildcard):
             pattern[0].greedy = greedy
         return Optional(greedy=greedy, pattern=pattern)
@@ -295,7 +295,7 @@ class TargetRef(Element):
         else:
             return TargetRef(direction=-1)
 
-    def resolve_target(self, target):
+    def resolveTarget(self, target):
         return [Grapheme(graph) for graph in (target if self.direction == 1 else reversed(target))]
 
 ELEMENT_DICT = {
@@ -309,14 +309,6 @@ ELEMENT_DICT = {
     'DITTO': Ditto,
     'SYLBREAK': SylBreak,
 }
-
-def escape(string):
-    while True:
-        ix = string.find('\\')
-        if ix == -1:
-            break
-        string = string[:ix] + f'{{u{ord(string[ix+1])}}}' + string[ix+2:]
-    return string
 
 # Don't slice the string when calling this
 def tokenise(string, colstart=None, linenum=0):
@@ -367,7 +359,7 @@ def tokenise(string, colstart=None, linenum=0):
     if nested:
         return colstart
 
-def match_brackets(tokens, start=0):
+def matchBrackets(tokens, start=0):
     if tokens[start].type not in ('LOPT', 'LCAT'):
         raise TokenError(f'expected bracket', tokens[start])
     else:
@@ -383,8 +375,8 @@ def match_brackets(tokens, start=0):
                 return i
     raise TokenError(f'unmatched bracket', tokens[start])
 
-def compile_tokens(tokens, cats=None):
-    from .core import parse_word
+def compile(tokens, cats=None):
+    from .core import parseWord
     tokens = list(tokens)
     if not tokens:
         return []
@@ -397,7 +389,7 @@ def compile_tokens(tokens, cats=None):
     while i < len(tokens):
         type, value = tokens[i]
         if type in ('LOPT', 'LCAT'):
-            j = match_brackets(tokens, i)
+            j = matchBrackets(tokens, i)
         else:
             j = i+1
         if type == 'NULL':
@@ -405,7 +397,7 @@ def compile_tokens(tokens, cats=None):
         elif type == 'REPETITION':
             elements[-1:] = elements[-1:]*int(value[1:-1])
         elif type == 'TEXT':
-            elements.extend([Grapheme(graph) for graph in parse_word(value, graphs)])
+            elements.extend([Grapheme(graph) for graph in parseWord(value, graphs)])
         elif type in ELEMENT_DICT:
             cls = ELEMENT_DICT[type]
             elements.append(cls.fromTokens(tokens[i:j], cats))
@@ -414,7 +406,7 @@ def compile_tokens(tokens, cats=None):
         i = j
     return elements
 
-def parse_pattern(pattern, cats=None):
+def parsePattern(pattern, cats=None):
     '''Parse a string using pattern notation.
 
     Arguments:
@@ -427,11 +419,11 @@ def parse_pattern(pattern, cats=None):
     if isinstance(pattern, Word):
         return [Grapheme(graph) for graph in Word]
     try:
-        return compile_tokens(tokenise(pattern), cats)
+        return compile(tokenise(pattern), cats)
     except CompilerError as e:
         raise FormatError(f'invalid pattern: {pattern!r}; {e.args[0]}')
 
-def parse_patterns(patterns, cats=None):
+def parsePatterns(patterns, cats=None):
     '''Parses generation patterns.
 
     Arguments:
@@ -450,16 +442,16 @@ def parse_patterns(patterns, cats=None):
             if not pattern:
                 continue
             if isinstance(pattern, str):
-                _patterns.append(parse_pattern(pattern, cats))
+                _patterns.append(parsePattern(pattern, cats))
             else:
                 _patterns.append(pattern)
     elif isinstance(patterns, dict):
-        _patterns = {key: parse_patterns(patterns[key], cats) for key in patterns}
+        _patterns = {key: parsePatterns(patterns[key], cats) for key in patterns}
     else:
         _patterns = None
     return _patterns
 
-def match_pattern(word, pattern, start, end, step, stack=None):
+def matchPattern(word, pattern, start, end, step, stack=None):
     '''Match a pattern sequence to the word.
 
     Return if the sequence matches the end of the given slice of the word, the far end of the match, and category indexes.
@@ -519,7 +511,7 @@ def match_pattern(word, pattern, start, end, step, stack=None):
                     length = 0
                 if token.greedy or not matched:
                     _start, _end = (pos, end) if istep > 0 else (start, pos+1)
-                    matched, rpos, _catixes, _stack = match_pattern(word, token.pattern, _start, _end, step, _stack)
+                    matched, rpos, _catixes, _stack = matchPattern(word, token.pattern, _start, _end, step, _stack)
                     # Merge in the stack - if a reference has an index within token, nest it and push a reference to
                     # the token, else correct the index and push it directly
                     for _pos, _ix in _stack:
