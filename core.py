@@ -297,7 +297,7 @@ class Word:
         start, end = sliceIndices(self, start, end)
         return matchPattern(self, pattern, start, end, step)
 
-    def matchEnv(self, env, pos=0, rpos=0):  # Test if the env matches the word
+    def matchEnv(self, environment, pos=0, rpos=0):  # Test if the env matches the word
         '''Match a sound change environment to the word.
 
         Arguments:
@@ -307,23 +307,13 @@ class Word:
 
         Returns a bool
         '''
-        from .sce import GlobalEnvironment, LocalEnvironment
-        if isinstance(env, list):
-            return all(self.matchEnv(e, pos, rpos) for e in env)
-        elif env is None:  # Blank environment
-            return True
-        env = env.resolveTargetRef(self[pos:rpos])
-        if isinstance(env, GlobalEnvironment):
-            return env in self
-        # Local environment
-        elif isinstance(env, LocalEnvironment):
-            left, right = env
-            if pos:
-                matchleft = self.matchPattern(left, 0, pos, -1)[0]
-            else:  # At the left edge, which can only be matched by a null env
-                matchleft = False if left else True
-            matchright = self.matchPattern(right, rpos)[0]
-            return matchleft and matchright
+        for env in environment:
+            if env is None:  # Blank environment
+                continue
+            env = env.resolveTargetRef(self[pos:rpos])
+            if not env.match(self, pos, rpos):
+                return False
+        return True
 
     def applyMatch(self, match, rep):
         '''Apply a replacement to a word

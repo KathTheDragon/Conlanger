@@ -117,7 +117,7 @@ class WordUnchanged(LangException):
 
 # == Classes == #
 @dataclass
-class Target:
+class IndexedPattern:
     pattern: list
     indices: list = None
 
@@ -134,7 +134,15 @@ class Target:
         yield self.indices
 
     def copy(self):
-        return Target(self.pattern.copy(), self.indices.copy())
+        cls = self.__class__
+        if self.indices is not None:
+            return cls(self.pattern.copy(), self.indices.copy())
+        else:
+            return cls(self.pattern.copy())
+
+@dataclass
+class Target(IndexedPattern):
+    pass
 
 @dataclass
 class Replacement:
@@ -180,37 +188,28 @@ class LocalEnvironment:
     def resolveTargetRef(self, target):
         return LocalEnvironment(resolveTargetRef(self.left, target), resolveTargetRef(self.right, target))
 
+    def match(self, word, pos=0, rpos=0):
+        left, right = self
+        if pos:
+            matchleft = word.matchPattern(left, 0, pos, -1)[0]
+        else:  # At the left edge, which can only be matched by a null env
+            matchleft = False if left else True
+        matchright = word.matchPattern(right, rpos)[0]
+        return matchleft and matchright
+
 @dataclass
-class GlobalEnvironment:
-    pattern: list
-    indices: list = None
-
-    def __str__(self):
-        if self.indices is None:
-            return str(self.pattern)
-        elif not self.pattern:
-            return f'@{self.indices}'
-        else:
-            return f'{self.pattern}@{self.indices}'
-
+class GlobalEnvironment(IndexedPattern):
     def __bool__(self):
         return bool(self.pattern or self.indices)
-
-    def __iter__(self):
-        yield self.pattern
-        yield self.indices
-
-    def copy(self):
-        if self.indices is not None:
-            return GlobalEnvironment(self.pattern.copy(), self.indices.copy())
-        else:
-            return GlobalEnvironment(self.pattern.copy())
 
     def resolveTargetRef(self, target):
         if self.indices is not None:
             return GlobalEnvironment(resolveTargetRef(self.pattern, target), self.indices.copy())
         else:
             return GlobalEnvironment(resolveTargetRef(self.pattern, target))
+
+    def match(self, word, pos=0, rpos=0):
+        return self in word
 
 @dataclass
 class Flags:
