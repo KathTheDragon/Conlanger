@@ -606,6 +606,8 @@ def parseWord(word, graphs=None, separator=''):
     word = WHITESPACE_REGEX.sub('#', word)
     if graphs is None:
         return list(word)
+    if not separator:
+        separator = '.'
     polygraphs = [graph for graph in graphs if len(graph) > 1]
     if not polygraphs:
         return list(word.replace(separator, ''))
@@ -627,6 +629,8 @@ def unparseWord(wordin, graphs=None, separator=''):
         polygraphs = []
     else:
         polygraphs = [graph for graph in graphs if len(graph) > 1]
+    if not separator:
+        separator = '.'
     if not polygraphs:
         word = ''.join(wordin)
         wordin = []
