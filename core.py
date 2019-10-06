@@ -144,7 +144,7 @@ class Cat:
                 if not value:
                     raise FormatError(f'invalid category values: {cat}')
                 elif value.startswith('[') and value.endswith(']'):
-                    values.extend(Cat.make(value))
+                    values.extend(Cat.make(value, cats))
                 else:
                     if ' ' in value or '[' in value or ']' in value:
                         raise FormatError(f'invalid category value: {value}')
