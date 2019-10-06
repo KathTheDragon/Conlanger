@@ -135,7 +135,10 @@ class Cat:
         cat = string[1:-1]
         if ',' in cat:  # Nonce category
             if cat.endswith(','):
-                cat = cat[:-1]
+                if cat.count(',') == 1:
+                    cat = cat[:-1]
+                else:
+                    raise FormatError(f'invalid category values: {cat}')
             values = []
             for value in re.split(r', ?', cat):
                 if not value:
