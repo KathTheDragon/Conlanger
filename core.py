@@ -174,11 +174,12 @@ class Word:
     phones: list = field(init=False)
     lexeme: InitVar[str] = ''
     graphs: Cat = None
+    separator: str = ''
     syllabifier: 'Syllabifier' = None
 
     def __post_init__(self, lexeme):
         if isinstance(lexeme, str):
-            self.phones = parseWord(f' {lexeme} ', self.graphs)
+            self.phones = parseWord(f' {lexeme} ', self.graphs, self.separator)
         else:
             phones = []
             for i, phone in enumerate(lexeme):
@@ -196,14 +197,14 @@ class Word:
         return f'Word({str(self)!r})'
 
     def __str__(self):
-        return unparseWord(self, self.graphs)
+        return unparseWord(self, self.graphs, self.separator)
 
     def __len__(self):
         return len(self.phones)
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return Word(self.phones[item], self.graphs, self.syllabifier)
+            return Word(self.phones[item], self.graphs, self.separator, self.syllabifier)
         else:
             return self.phones[item]
 
@@ -232,9 +233,11 @@ class Word:
             elif other.graphs is not None:
                 graphs = graphs + other.graphs[1:]
             other = other.phones
+            separator = self.separator or other.separator
         elif isinstance(other, str):
             other = parseWord(other, graphs)
-        return Word(self.phones + other, graphs, self.syllabifier)
+            separator = self.separator
+        return Word(self.phones + other, graphs, separator, self.syllabifier)
 
     def __radd__(self, other):
         graphs = self.graphs
@@ -246,15 +249,17 @@ class Word:
             elif other.graphs is not None:
                 graphs = graphs + other.graphs[1:]
             other = other.phones
+            separator = self.separator or other.separator
         elif isinstance(other, str):
             other = parseWord(other, graphs)
-        return Word(other + self.phones, graphs, self.syllabifier)
+            separator = self.separator
+        return Word(other + self.phones, graphs, separator, self.syllabifier)
 
     def __mul__(self, other):
-        return Word(self.phones * other, self.graphs, self.syllabifier)
+        return Word(self.phones * other, self.graphs, self.separator, self.syllabifier)
 
     def __rmul__(self, other):
-        return Word(self.phones * other, self.graphs, self.syllabifier)
+        return Word(self.phones * other, self.graphs, self.separator, self.syllabifier)
 
     def __iadd__(*args):
         return NotImplemented
