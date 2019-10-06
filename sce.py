@@ -23,7 +23,6 @@ Is it possible to implement a>b>c as notation for a chain shift?
 Think about expanding the options for grapheme handling
 - diacritics
 Allow ~ in tar and rep
-Look into *not* removing category definitions, to aid extracting graph definitions
 Implement more category operations
 - intersection
 -- feature-style? [+A +B -C] == [A] && [B] && ~[C]
