@@ -431,7 +431,7 @@ class RuleBlock(list):
         return word
 
 # == Functions == #
-def parseWordset(wordset, cats=None, syllabifier=None):
+def parseWordset(wordset, graphs=None, separator=None, syllabifier=None):
     '''Parses a wordlist.
 
     Arguments:
@@ -442,10 +442,6 @@ def parseWordset(wordset, cats=None, syllabifier=None):
     '''
     if isinstance(wordset, str):
         wordset = wordset.splitlines()
-    if cats is not None and 'graphs' in cats:
-        graphs = cats['graphs']
-    else:
-        graphs = Cat(["'"])
     _wordset = []
     for word in wordset:
         if isinstance(word, Word):
@@ -456,9 +452,9 @@ def parseWordset(wordset, cats=None, syllabifier=None):
             line = [word[2:]]
         elif '//' in word:  # Contains a comment
             word, comment = word.split('//', 1)
-            line = [Word(word, graphs, syllabifier), comment]
+            line = [Word(word, graphs, separator, syllabifier), comment]
         elif word:
-            line = [Word(word, graphs, syllabifier)]
+            line = [Word(word, graphs, separator, syllabifier)]
         else:
             line = []
         _wordset.append(line)
