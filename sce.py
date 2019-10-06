@@ -798,6 +798,7 @@ def makeBlock(ruleset, start=None, num=None, defs=None):
         defs = {}
     else:
         defs = defs.copy()
+    cats = []
     block = []
     if start is None:
         i = 0
@@ -808,20 +809,28 @@ def makeBlock(ruleset, start=None, num=None, defs=None):
         i += 1
         if isinstance(rule, Rule):  # Rule
             block.append(rule)
+        elif isinstance(rule, dict):  # Category
+            cats += rule.items()
         elif isinstance(rule, tuple):  # Metarule
             name, arg, flags = rule
             if name == 'block':
-                _block, i, defs = makeBlock(ruleset, i, arg, defs)
+                if arg is not None:
+                    _block, _cats, i, defs = makeBlock(ruleset, i, arg, defs)
+                else:
+                    _block, _cats = makeBlock(ruleset, i, arg, defs)
+                    i = len(ruleset)
                 block.append(RuleBlock(_block, flags))
+                cats += _cats
             elif name == 'def':
-                _block, i, defs = makeBlock(ruleset, i, 1, defs)
+                _block, _cats, i, defs = makeBlock(ruleset, i, 1, defs)
                 defs[arg] = _block
+                cats += _cats
             elif name == 'rule':
                 block.extend(defs[arg])
     if start is None:
-        return block
+        return block, cats
     else:
-        return block, i, defs
+        return block, cats, i, defs
 
 def compileRuleset(ruleset, cats=None):
     if isinstance(ruleset, str):
