@@ -389,7 +389,8 @@ class Word:
             if mode == 'move':  # Move - delete original target
                 word = self[:pos] + self[rpos:]
             for match in sorted(matches, reverse=True):
-                return word[:match] + target + word[match:]
+                word = word[:match] + target + word[match:]
+            return word
         else:
             raise RuleError(f'invalid replacement: {rep}')
 
