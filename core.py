@@ -643,41 +643,6 @@ def unparseWord(wordin, graphs=None):
         word += graph
     return word.strip(separator+'#').replace('#', ' ')
 
-def split(string, sep=None, nesting=None, minimal=False):
-    '''Nesting-aware string splitting.
-
-    Arguments:
-        string  -- the string to be split (str)
-        sep     -- the character(s) to split on (str)
-        nesting -- a tuple of the form (depth, open, close) containing the nesting depth, and opening and closing nesting characters (tuple)
-        minimal -- whether or not to perform the minimal number of splits, similar to str.split() with no arguments
-
-    Returns a list.
-    '''
-    from string import whitespace
-    if sep is None:
-        sep = whitespace
-        minimal = True
-    result = []
-    depth = 0
-    while True:
-        if minimal and (nesting is None or depth == nesting[0]):
-            string = string.lstrip(sep)
-        for i, char in enumerate(string):
-            if char in sep and (nesting is None or depth == nesting[0]):
-                result.append(string[:i])
-                string = string[i+1:]
-                break
-            elif nesting is not None and char in nesting[1]:
-                depth += 1
-            elif nesting is not None and char in nesting[2]:
-                depth -= 1
-        else:
-            if not minimal or string != '':
-                result.append(string)
-            break
-    return result
-
 def partition(sequence, *, sep=None, sepfunc=None, yieldsep=False):
     if sep is None == sepfunc is None:
         raise ValueError('exactly one of sep and sepfunc must be given')

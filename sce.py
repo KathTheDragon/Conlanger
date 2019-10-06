@@ -41,7 +41,7 @@ import logging.config
 import os.path
 import re
 from dataclasses import dataclass, InitVar
-from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parseCats, split, partitionTokens
+from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parseCats, partitionTokens
 from ._pattern import tokenise as tokenisePattern, compile as compilePattern
 
 # == Constants == #
