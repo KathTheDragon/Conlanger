@@ -230,7 +230,7 @@ class Word:
             elif graphs is None:
                 graphs = other.graphs
             elif other.graphs is not None:
-                graphs += other.graphs[1:]
+                graphs = graphs + other.graphs[1:]
             other = other.phones
         elif isinstance(other, str):
             other = parseWord(other, graphs)
