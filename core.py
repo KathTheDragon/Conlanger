@@ -369,7 +369,7 @@ class Word:
                 else:
                     _rep.append('')
             return self[:pos] + _rep + self[rpos:]
-        elif isinstance(rep, tuple) and isinstance(rep[1], list):  # Copy/Move
+        elif isinstance(rep, tuple):  # Copy/Move
             mode, envs = rep
             matches = []
             for env in envs:  # Each anded environment contributes destinations
