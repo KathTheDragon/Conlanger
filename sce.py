@@ -853,11 +853,10 @@ def compileRuleset(ruleset, cats=None):
         else:
             if isinstance(rule, dict):  # Category
                 cats.update(rule)
-            else:
-                _ruleset.append(rule)
+            _ruleset.append(rule)
     # Evaluate meta-rules
-    ruleset = makeBlock(_ruleset)
-    return RuleBlock(ruleset)
+    ruleset, _cats = makeBlock(_ruleset)
+    return RuleBlock(ruleset), _cats
 
 def setupLogging(filename=__location__, loggername='sce'):
     global logger
