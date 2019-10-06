@@ -376,7 +376,7 @@ class Word:
                 if isinstance(env, LocalEnvironment):
                     env = env.resolveTargetRef(target)
                     for wpos in range(1, len(self)):  # Find all matches
-                        if self.matchEnv(env, wpos, wpos):
+                        if env.match(self, wpos, wpos):
                             if mode == 'move' and wpos >= rpos:  # We'll need to adjust the matches down
                                 wpos -= rpos-pos
                             matches.append(wpos)
