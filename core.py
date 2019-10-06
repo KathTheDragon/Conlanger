@@ -105,7 +105,7 @@ class Cat:
         return Cat([value for value in self if value in cat])
 
     def __add__(self, cat):
-        return Cat(list.__add__(self, cat))
+        return Cat(self.values + list(cat))
 
     def __iadd__(self, cat):
         return NotImplemented
