@@ -236,6 +236,20 @@ class Word:
             other = parseWord(other, graphs)
         return Word(self.phones + other, graphs, self.syllabifier)
 
+    def __radd__(self, other):
+        graphs = self.graphs
+        if isinstance(other, Word):
+            if graphs == other.graphs:
+                pass
+            elif graphs is None:
+                graphs = other.graphs
+            elif other.graphs is not None:
+                graphs = graphs + other.graphs[1:]
+            other = other.phones
+        elif isinstance(other, str):
+            other = parseWord(other, graphs)
+        return Word(other + self.phones, graphs, self.syllabifier)
+
     def __mul__(self, other):
         return Word(self.phones * other, self.graphs, self.syllabifier)
 
