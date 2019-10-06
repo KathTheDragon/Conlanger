@@ -145,9 +145,9 @@ class Cat:
                     raise FormatError(f'invalid category values: {cat}')
                 elif value.startswith('[') and value.endswith(']'):
                     values.extend(Cat.make(value, cats))
+                elif ' ' in value or '[' in value or ']' in value:
+                    raise FormatError(f'invalid category value: {value}')
                 else:
-                    if ' ' in value or '[' in value or ']' in value:
-                        raise FormatError(f'invalid category value: {value}')
                     values.append(value)
             return Cat(values, name)
         else:  # Named category
