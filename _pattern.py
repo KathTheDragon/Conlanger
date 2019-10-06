@@ -417,7 +417,7 @@ def parsePattern(pattern, cats=None):
     '''
     from .core import Word
     if isinstance(pattern, Word):
-        return [Grapheme(graph) for graph in Word]
+        return [Grapheme(graph) for graph in pattern]
     try:
         return compile(tokenise(pattern), cats)
     except CompilerError as e:
