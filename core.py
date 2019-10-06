@@ -117,7 +117,13 @@ class Cat:
         return all(value in cat for value in self)
 
     def __lt__(self, cat):
-        return self <= cat and self != cat
+        return self <= cat and not (self >= cat)
+
+    def __ge__(self, cat):
+        return all(value in self for value in cat)
+
+    def __gt__(self, cat):
+        return self >= cat and not (self <= cat)
 
     def index(self, item):
         return self.values.index(item)
