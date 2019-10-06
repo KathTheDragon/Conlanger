@@ -879,16 +879,16 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     if not ruleset or not wordset:  # One of these is blank so do nothing
         return wordset
     cats = parseCats(cats)
-    # If we didn't get passed a graphs category, check if we can get it from the ruleset
-    if 'graphs' not in cats:
-        if isinstance(ruleset, str):
-            rule = ruleset.splitlines()[0]
-        else:
-            rule = ruleset[0]
-        if isinstance(rule, str) and '>' not in rule and '=' in rule and rule.startswith('graphs'):
-            cats['graphs'] = Cat.make(rule.split('=')[1].strip(), cats)
-    wordset = parseWordset(wordset, cats, syllabifier)
-    ruleset = compileRuleset(ruleset, cats)
+    ruleset, _cats = compileRuleset(ruleset, cats)  # Compile ruleset first so we can use the graphs it contains
+    # Try to get graphs and separator from the initial categories
+    graphs = cats.get('graphs', None)
+    separator = cats.get('separator', [''])[0]
+    for name, value in _cats[:2]:
+        if name == 'graphs' and graphs is None:
+            graphs = value
+        elif name == 'separator' and separator == '':
+            separator = value[0]
+    wordset = parseWordset(wordset, graphs, separator, syllabifier)
     for line in wordset:
         if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
             logger.info(f'This word: {line[0]}')
