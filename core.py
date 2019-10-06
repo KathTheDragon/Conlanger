@@ -324,9 +324,8 @@ class Word:
         '''Match a sound change environment to the word.
 
         Arguments:
-            env  -- the environment to be matched (list)
-            pos  -- the index of the left edge of the target (int)
-            rpos -- the index past the right edge of the target (int)
+            environment -- the environment to be matched (list)
+            pos, rpos   -- the slice of the word giving the target (int, int)
 
         Returns a bool
         '''
