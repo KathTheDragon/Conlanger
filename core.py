@@ -588,7 +588,7 @@ def parseCats(cats, initialcats=None):
 
 WHITESPACE_REGEX = re.compile(r'\s+')
 
-def parseWord(word, graphs=None):
+def parseWord(word, graphs=None, separator=''):
     '''Parse a string of graphemes.
 
     Arguments:
@@ -606,7 +606,6 @@ def parseWord(word, graphs=None):
     word = WHITESPACE_REGEX.sub('#', word)
     if graphs is None:
         return list(word)
-    separator = graphs[0]
     polygraphs = [graph for graph in graphs if len(graph) > 1]
     if not polygraphs:
         return list(word.replace(separator, ''))
@@ -622,13 +621,11 @@ def parseWord(word, graphs=None):
                     break
     return graphemes
 
-def unparseWord(wordin, graphs=None):
+def unparseWord(wordin, graphs=None, separator=''):
     word = test = ''
     if graphs is None:
-        separator = ''
         polygraphs = []
     else:
-        separator = graphs[0]
         polygraphs = [graph for graph in graphs if len(graph) > 1]
     if not polygraphs:
         word = ''.join(wordin)
