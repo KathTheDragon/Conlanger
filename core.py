@@ -268,7 +268,7 @@ class Word:
         start = end = None
         for i, char in enumerate(self):
             if char not in chars:
-                if start is not None:
+                if start is None:
                     start = i
                 if self[i+1] in chars:
                     end = i+1
