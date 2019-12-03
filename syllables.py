@@ -13,14 +13,11 @@ class Syllabifier:
         constraints = parsePatterns(constraints)
         self.rules = []
         # Generate medial rules - coda + onset + nucleus
-        rules = getNonFinals(onsets, nuclei, codas)
-        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+        self.rules.extend(getNonFinals(onsets, nuclei, codas))
         # Generate final rules - coda + right margin
-        rules = getFinals(codas, margins)
-        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+        self.rules.extend(getFinals(codas, margins))
         # Generate initial rules - left margin + onset + nucleus
-        rules = getNonFinals(onsets, nuclei, margins)
-        self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
+        self.rules.extend(getNonFinals(onsets, nuclei, margins))
         self.rules = [rule for rule in self.rules if checkValid(rule[0], constraints)]
 
     def __call__(self, word):
@@ -74,7 +71,7 @@ def getNonFinals(onsets, nuclei, codas):
                     breaks.append(len(pattern)-1)
                 rank = crank + orank + nrank
                 rules.append((pattern, breaks, rank))
-    return rules
+    return (r[:2] for r in sorted(rules, key=lambda r: r[2]))
 
 def getFinals(codas, margins):
     rules = []
@@ -91,7 +88,7 @@ def getFinals(codas, margins):
             breaks = [0 if coda == ['_'] else len(coda)]
             rank = crank + mrank
             rules.append((pattern, breaks, rank))
-    return rules
+    return (r[:2] for r in sorted(rules, key=lambda r: r[2]))
 
 def checkValid(rule, constraints):
     for constraint in constraints:
