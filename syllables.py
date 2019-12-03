@@ -13,83 +13,15 @@ class Syllabifier:
         constraints = parsePatterns(constraints)
         self.rules = []
         # Generate medial rules - coda + onset + nucleus
-        rules = self.getNonFinals(onsets, nuclei, codas)
+        rules = getNonFinals(onsets, nuclei, codas)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         # Generate final rules - coda + right margin
-        rules = self.getFinals(codas, margins)
+        rules = getFinals(codas, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
         # Generate initial rules - left margin + onset + nucleus
-        rules = self.getNonFinals(onsets, nuclei, margins)
+        rules = getNonFinals(onsets, nuclei, margins)
         self.rules.extend(r[:2] for r in sorted(rules, key=lambda r: r[2]))
-        self.rules = [rule for rule in self.rules if self.checkValid(rule[0], constraints)]
-
-    @staticmethod
-    def getNonFinals(onsets, nuclei, codas):
-        rules = []
-        for crank, coda in enumerate(codas):
-            if coda[-1] == '#':
-                continue
-            elif coda[-1] == '_':
-                coda = coda[:-1]
-            for orank, onset in enumerate(onsets):
-                if onset[0] == '#':
-                    if coda == ['#']:
-                        onset = onset[1:]
-                    else:
-                        continue
-                if onset == ['_']:
-                    onset = []
-                for nrank, nucleus in enumerate(nuclei):
-                    if nucleus[0] == '#':
-                        if coda == ['#'] and onset == []:
-                            nucleus = nucleus[1:]
-                        else:
-                            continue
-                    pattern = coda + onset + nucleus
-                    breaks = [len(coda)]
-                    if pattern[-1] == '#':
-                        breaks.append(len(pattern)-1)
-                    rank = crank + orank + nrank
-                    rules.append((pattern, breaks, rank))
-        return rules
-
-    @staticmethod
-    def getFinals(codas, margins):
-        rules = []
-        for mrank, margin in enumerate([margin for margin in margins if margin[-1] == '#']):
-            if margin == ['_', '#']:
-                margin = ['#']
-            for crank, coda in enumerate(codas):
-                if coda[-1] == '#':
-                    if margin == ['#']:
-                        coda = coda[:-1]
-                    else:
-                        continue
-                pattern = coda + margin
-                breaks = [0 if coda == ['_'] else len(coda)]
-                rank = crank + mrank
-                rules.append((pattern, breaks, rank))
-        return rules
-
-    @staticmethod
-    def checkValid(rule, constraints):
-        for constraint in constraints:
-            for rpos in range(len(rule)-len(constraint)):
-                for cpos, ctoken in enumerate(constraint):
-                    rtoken = rule[rpos+cpos]
-                    if isinstance(rtoken, str) and isinstance(ctoken, str):
-                        if rtoken == ctoken:
-                            continue
-                    elif isinstance(rtoken, str) and isinstance(ctoken, Cat):
-                        if rtoken in ctoken:
-                            continue
-                    elif isinstance(rtoken, Cat) and isinstance(ctoken, Cat):
-                        if rtoken <= ctoken:
-                            continue
-                    break
-                else:
-                    return False
-        return True
+        self.rules = [rule for rule in self.rules if checkValid(rule[0], constraints)]
 
     def __call__(self, word):
         breaks = []
@@ -114,3 +46,68 @@ class Syllabifier:
             else:  # No matches here
                 pos += 1
         return tuple(breaks)
+
+def getNonFinals(onsets, nuclei, codas):
+    rules = []
+    for crank, coda in enumerate(codas):
+        if coda[-1] == '#':
+            continue
+        elif coda[-1] == '_':
+            coda = coda[:-1]
+        for orank, onset in enumerate(onsets):
+            if onset[0] == '#':
+                if coda == ['#']:
+                    onset = onset[1:]
+                else:
+                    continue
+            if onset == ['_']:
+                onset = []
+            for nrank, nucleus in enumerate(nuclei):
+                if nucleus[0] == '#':
+                    if coda == ['#'] and onset == []:
+                        nucleus = nucleus[1:]
+                    else:
+                        continue
+                pattern = coda + onset + nucleus
+                breaks = [len(coda)]
+                if pattern[-1] == '#':
+                    breaks.append(len(pattern)-1)
+                rank = crank + orank + nrank
+                rules.append((pattern, breaks, rank))
+    return rules
+
+def getFinals(codas, margins):
+    rules = []
+    for mrank, margin in enumerate([margin for margin in margins if margin[-1] == '#']):
+        if margin == ['_', '#']:
+            margin = ['#']
+        for crank, coda in enumerate(codas):
+            if coda[-1] == '#':
+                if margin == ['#']:
+                    coda = coda[:-1]
+                else:
+                    continue
+            pattern = coda + margin
+            breaks = [0 if coda == ['_'] else len(coda)]
+            rank = crank + mrank
+            rules.append((pattern, breaks, rank))
+    return rules
+
+def checkValid(rule, constraints):
+    for constraint in constraints:
+        for rpos in range(len(rule)-len(constraint)):
+            for cpos, ctoken in enumerate(constraint):
+                rtoken = rule[rpos+cpos]
+                if isinstance(rtoken, str) and isinstance(ctoken, str):
+                    if rtoken == ctoken:
+                        continue
+                elif isinstance(rtoken, str) and isinstance(ctoken, Cat):
+                    if rtoken in ctoken:
+                        continue
+                elif isinstance(rtoken, Cat) and isinstance(ctoken, Cat):
+                    if rtoken <= ctoken:
+                        continue
+                break
+            else:
+                return False
+    return True
