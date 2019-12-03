@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Syllabifier:
-    rules: list
+    rules: tuple
 
     def __init__(self, cats, onsets=(), nuclei=(), codas=(), margins=(), constraints=()):
         from ._pattern import parsePatterns
@@ -15,7 +15,7 @@ class Syllabifier:
         rules.extend(generateNonFinals(codas, onsets, nuclei))    # Medials
         rules.extend(generateFinals(codas, margins))              # Finals
         rules.extend(generateNonFinals(margins, onsets, nuclei))  # Initials
-        self.rules = [rule for rule in self.rules if checkValid(rule[0], constraints)]
+        self.rules = tuple(rule for rule in self.rules if checkValid(rule[0], constraints))
 
     def __call__(self, word):
         breaks = []
