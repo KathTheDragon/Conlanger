@@ -12,12 +12,9 @@ class Syllabifier:
         margins = parsePatterns(margins)
         constraints = parsePatterns(constraints)
         rules = []
-        # Generate medial rules - coda + onset + nucleus
-        rules.extend(getNonFinals(onsets, nuclei, codas))
-        # Generate final rules - coda + right margin
-        rules.extend(getFinals(codas, margins))
-        # Generate initial rules - left margin + onset + nucleus
-        rules.extend(getNonFinals(onsets, nuclei, margins))
+        rules.extend(generateNonFinals(codas, onsets, nuclei))    # Medials
+        rules.extend(generateFinals(codas, margins))              # Finals
+        rules.extend(generateNonFinals(margins, onsets, nuclei))  # Initials
         self.rules = [rule for rule in self.rules if checkValid(rule[0], constraints)]
 
     def __call__(self, word):
@@ -44,7 +41,7 @@ class Syllabifier:
                 pos += 1
         return tuple(breaks)
 
-def getNonFinals(onsets, nuclei, codas):
+def generateNonFinals(codas, onsets, nuclei):
     rules = []
     for crank, coda in enumerate(codas):
         if coda[-1] == '#':
@@ -73,7 +70,7 @@ def getNonFinals(onsets, nuclei, codas):
                 rules.append((pattern, breaks, rank))
     return (r[:2] for r in sorted(rules, key=lambda r: r[2]))
 
-def getFinals(codas, margins):
+def generateFinals(codas, margins):
     rules = []
     for mrank, margin in enumerate([margin for margin in margins if margin[-1] == '#']):
         if margin == ['_', '#']:
