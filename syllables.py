@@ -11,13 +11,13 @@ class Syllabifier:
         codas = parsePatterns(codas)
         margins = parsePatterns(margins)
         constraints = parsePatterns(constraints)
-        self.rules = []
+        rules = []
         # Generate medial rules - coda + onset + nucleus
-        self.rules.extend(getNonFinals(onsets, nuclei, codas))
+        rules.extend(getNonFinals(onsets, nuclei, codas))
         # Generate final rules - coda + right margin
-        self.rules.extend(getFinals(codas, margins))
+        rules.extend(getFinals(codas, margins))
         # Generate initial rules - left margin + onset + nucleus
-        self.rules.extend(getNonFinals(onsets, nuclei, margins))
+        rules.extend(getNonFinals(onsets, nuclei, margins))
         self.rules = [rule for rule in self.rules if checkValid(rule[0], constraints)]
 
     def __call__(self, word):
