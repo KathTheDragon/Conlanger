@@ -451,7 +451,7 @@ def parseCats(cats, initialcats=None):
         elif isinstance(value, list):
             _cats[key] = Cat(value, key)
         elif isinstance(value, str):
-            _cats[key] = Cat.make(f'[{values}]', _cats, key)
+            _cats[key] = Cat.make(f'[{value}]', _cats, key)
         else:
             raise FormatError('invalid category values')
     for cat in list(_cats):  # Discard blank categories
