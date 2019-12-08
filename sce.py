@@ -862,7 +862,7 @@ def setupLogging(filename=__location__, loggername='sce'):
         logging.config.fileConfig(filename)
     logger = logging.getLogger(loggername)
 
-def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
+def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
     '''Applies a set of sound change rules to a set of words.
 
     Arguments:
@@ -876,7 +876,7 @@ def run(wordset, ruleset, cats='', syllabifier=None, output='list'):
     '''
     if not ruleset or not wordset:  # One of these is blank so do nothing
         return wordset
-    cats = parseCats(cats)
+    cats = parseCats(cats or {})
     ruleset, _cats = compileRuleset(ruleset, cats)  # Compile ruleset first so we can use the graphs it contains
     # Try to get graphs and separator from the initial categories
     graphs = cats.get('graphs', None)

@@ -443,30 +443,17 @@ def parseCats(cats, initialcats=None):
         _cats = {}
     else:
         _cats = initialcats.copy()
-    if isinstance(cats, str):
-        cats = cats.splitlines()
-    if isinstance(cats, list):
-        for cat in cats:
-            if '=' in cat:
-                cop = cat.index('=')
-                op = (cat[cop-1] if cat[cop-1] in '+-' else '') + '='
-                name, values = cat.split(op)
-                name, values = name.strip(), values.strip()
-                if name != '' and values != '':
-                    cat = Cat.make(f'[{values}]', _cats, name)
-                    exec(f'_cats[name] {op} cat')
-                    if not _cats[name]:
-                        del _cats[name]
-    elif isinstance(cats, dict):
-        for key, value in cats.items():
-            if key == '' or not value:
-                continue
-            elif isinstance(value, Cat):
-                _cats[key] = value
-            elif isinstance(value, list):
-                _cats[key] = Cat(value, key)
-            else:
-                _cats[key] = Cat.make(value, _cats, key)  # meow
+    for key, value in cats.items():
+        if key == '' or not value:
+            pass
+        elif isinstance(value, Cat):
+            _cats[key] = value
+        elif isinstance(value, list):
+            _cats[key] = Cat(value, key)
+        elif isinstance(value, str):
+            _cats[key] = Cat.make(f'[{values}]', _cats, key)
+        else:
+            raise FormatError('invalid category values')
     for cat in list(_cats):  # Discard blank categories
         if not _cats[cat]:
             del _cats[cat]
