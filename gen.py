@@ -93,7 +93,7 @@ def peaked_dist(bins, a=0, m=0, c=0):
     else:
         return dist(bins[m:], a/(1-c), (x-c)/(1-c))
 
-def populate(pattern, mode, all=False):
+def populate(pattern, mode):
     '''Generate a word section according to 'pattern'
     
     Arguments:
@@ -101,32 +101,32 @@ def populate(pattern, mode, all=False):
         mode    -- representation of the mode of the grapheme distribution (list)
         all     -- indicator to generate every possible pattern, or one random pattern (bool)
     '''
-    if not all:  # One random syllable
-        result = []
-        for token in pattern:
-            if token.type == 'category':
-                result.append(peaked_dist(token.cat, *mode))
-            elif token == '"':
-                result.append(result[-1])
-            else:
-                result.append(str(token))
-        return result
-    else:  # Every possible syllable
-        results = [[]]
-        for token in pattern:
-            if token.type == 'category':
-                temp = []
-                for result in results:
-                    for graph in token.cat:
-                        temp.append(result+[graph])
-                results = temp
-            elif token == '"':
-                for i in range(len(results)):
-                    results[i].append(results[i][-1])
-            else:
-                for i in range(len(results)):
-                    results[i].append(str(token))
-        return results
+    result = []
+    for token in pattern:
+        if token.type == 'category':
+            result.append(peaked_dist(token.cat, *mode))
+        elif token == '"':
+            result.append(result[-1])
+        else:
+            result.append(str(token))
+    return result
+
+def populateAll(pattern):
+    results = [[]]
+    for token in pattern:
+        if token.type == 'category':
+            temp = []
+            for result in results:
+                for graph in token.cat:
+                    temp.append(result+[graph])
+            results = temp
+        elif token == '"':
+            for i in range(len(results)):
+                results[i].append(results[i][-1])
+        else:
+            for i in range(len(results)):
+                results[i].append(str(token))
+    return results
 
 def gen_word(config, graphs, syllabifier=None):
     '''Generate a single word as specified by the 'config'.
