@@ -121,11 +121,11 @@ def populateAll(pattern):
                     temp.append(result+[graph])
             results = temp
         elif token == '"':
-            for i in range(len(results)):
-                results[i].append(results[i][-1])
+            for result in results:
+                result.append(result[-1])
         else:
-            for i in range(len(results)):
-                results[i].append(str(token))
+            for result in results:
+                result.append(str(token))
     return results
 
 def gen_word(config, graphs, syllabifier=None):
