@@ -58,7 +58,7 @@ class ExceededMaxRunsError(LangException):
 # == Functions == #
 def dist(bins, a=0, x=None):  # First bin has frequency a, random variable x
     '''Returns an element of 'bins' according to a power law distribution.
-    
+
     Arguments:
         bins -- a non-empty ordered collection of elements (str, list, tuple)
         a    -- the frequency that the first bin should be selected (0 for equiprobable distribution) (float)
@@ -77,7 +77,7 @@ def dist(bins, a=0, x=None):  # First bin has frequency a, random variable x
 
 def peaked_dist(bins, a=0, m=0, c=0):
     '''Returns an element of 'bins' according to a peaked power law distribution.
-    
+
     Arguments:
         bins -- an ordered collection of elements (str, list, tuple)
         a    -- the frequency that the most frequent bin should be selected (0 for equiprobable distribution) (float)
@@ -95,7 +95,7 @@ def peaked_dist(bins, a=0, m=0, c=0):
 
 def populate(pattern, mode):
     '''Generate a word section according to 'pattern'
-    
+
     Arguments:
         pattern -- the pattern to generate (list)
         mode    -- representation of the mode of the grapheme distribution (list)
@@ -130,13 +130,13 @@ def populateAll(pattern):
 
 def gen_word(config, graphs, syllabifier=None):
     '''Generate a single word as specified by the 'config'.
-    
+
     Arguments:
         config -- the config data to be used to generate this word
         graphs -- the set of graphemes used for this word
-    
+
     Returns a Word
-    
+
     Raises ExceededMaxRunsError when the word repeatedly fails to be valid
     '''
     word = Word(['#'], graphs, syllabifier)
@@ -167,12 +167,12 @@ def gen_word(config, graphs, syllabifier=None):
 
 def gen_word2(phonotactics, sylrange=(1,), sylmode=(), graphs=None, syllabifier=None):
     '''Generate a single word as specified by the 'phonotactics'.
-    
+
     Arguments:
         phonotactics  -- the phonotactic data to be used
         graphs      -- the set of graphemes used for this word
         syllabifier -- the syllabifier used for syllabification
-    
+
     Returns a Word
     '''
     word = Word([], graphs, syllabifier)
