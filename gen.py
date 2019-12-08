@@ -1,15 +1,5 @@
 '''Generate syllables, words, or roots
 
-Exceptions:
-    ExceededMaxRunsError -- used to terminate generation
-
-Functions:
-    dist        -- provides a power law distribution
-    peaked_dist -- provides a peaked power law distribution
-    populate    -- generates a list of graphemes according to a pattern
-    gen_word    -- generates a word
-    gen_root    -- generates a root
-''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
 Doesn't seem to be checking exceptions correctly (not urgent-urgent)
@@ -22,7 +12,6 @@ Potentially going to be overhauled in the near future
 === Style ===
 Consider where to raise/handle exceptions
 
-''''''
 === Mathematical model ===
 r is the number of segments
 p is the 'dropoff rate'
