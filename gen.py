@@ -214,7 +214,8 @@ def selectPeriphery(peripheries, margins, edge, i):
         peripheries = [p for p in peripheries if p[edge] != '#']
     periphery = choice(peripheries)
     if edge and periphery[0] == '_':
-        periphery = periphery[1:]
+        return periphery[1:]
     elif not edge and periphery[-1] == '_':
-        periphery = periphery[:-1]
-    return periphery
+        return periphery[:-1]
+    else:
+        return periphery
