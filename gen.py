@@ -75,7 +75,7 @@ def dist(bins, a=0, x=None):  # First bin has frequency a, random variable x
     p = (1-a)+(a*(1-a)**r)/(1-a*r*(1-a)**(r-1))
     return bins[floor(log(1-x*(1-p**r), p))]
 
-def peaked_dist(bins, a=0, m=0, c=0):
+def peakedDist(bins, a=0, m=0, c=0):
     '''Returns an element of 'bins' according to a peaked power law distribution.
 
     Arguments:
@@ -104,7 +104,7 @@ def populate(pattern, mode):
     result = []
     for token in pattern:
         if token.type == 'category':
-            result.append(peaked_dist(token.cat, *mode))
+            result.append(peakedDist(token.cat, *mode))
         elif token == '"':
             result.append(result[-1])
         else:
@@ -128,7 +128,7 @@ def populateAll(pattern):
                 result.append(str(token))
     return results
 
-def gen_word(config, graphs, syllabifier=None):
+def genFromConfig(config, graphs, syllabifier=None):
     '''Generate a single word as specified by the 'config'.
 
     Arguments:
@@ -141,7 +141,7 @@ def gen_word(config, graphs, syllabifier=None):
     '''
     word = Word(['#'], graphs, syllabifier)
     patterns, constraints, sylrange, sylmode, patternmode, graphmode = config
-    sylcount = peaked_dist(sylrange, *sylmode)
+    sylcount = peakedDist(sylrange, *sylmode)
     for i in range(sylcount):
         if sylcount == 1:  # Monosyllable
             _patterns = patterns['mono'] or patterns['init'] or patterns['term'] or patterns['medi']
@@ -152,7 +152,7 @@ def gen_word(config, graphs, syllabifier=None):
         else:  # Medial syllable
             _patterns = patterns['medi']
         for j in range(MAX_RUNS):
-            pattern = peaked_dist(_patterns, *patternmode)
+            pattern = peakedDist(_patterns, *patternmode)
             syl = populate(pattern, graphmode)
             _word = word + syl
             for env in constraints:
@@ -165,7 +165,7 @@ def gen_word(config, graphs, syllabifier=None):
             raise ExceededMaxRunsError()
     return word + '#'
 
-def gen_word2(phonotactics, sylrange=(1,), sylmode=(), graphs=None, syllabifier=None):
+def genFromPhonotactics(phonotactics, sylrange=(1,), sylmode=(), graphs=None, syllabifier=None):
     '''Generate a single word as specified by the 'phonotactics'.
 
     Arguments:
@@ -176,14 +176,14 @@ def gen_word2(phonotactics, sylrange=(1,), sylmode=(), graphs=None, syllabifier=
     Returns a Word
     '''
     word = Word([], graphs, syllabifier)
-    sylcount = peaked_dist(sylrange, *sylmode)
+    sylcount = peakedDist(sylrange, *sylmode)
     for i in range(sylcount):
         # Generate a syllable
         for _ in range(MAX_RUNS):
             # Pick an onset
-            onset = select_periphery(phonotactics['onsets'], phonotactics['margins'], 'left', i)
+            onset = selectPeriphery(phonotactics['onsets'], phonotactics['margins'], 'left', i)
             # Pick a coda
-            coda = select_periphery(phonotactics['codas'], phonotactics['margins'], 'right', i-sylcount)
+            coda = selectPeriphery(phonotactics['codas'], phonotactics['margins'], 'right', i-sylcount)
             # Pick a nucleus
             nuclei = phonotactics['nuclei']
             if onset != ['#']:
@@ -203,7 +203,7 @@ def gen_word2(phonotactics, sylrange=(1,), sylmode=(), graphs=None, syllabifier=
             raise ExceededMaxRunsError()
     return word
 
-def select_periphery(peripheries, margins, edge, i):
+def selectPeriphery(peripheries, margins, edge, i):
     edge = 0 if edge == 'left' else -1
     if i == edge:
         margin = choice([margin for margin in margins if margin[edge] == '#'])
