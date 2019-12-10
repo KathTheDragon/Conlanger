@@ -144,8 +144,8 @@ def genFromConfig(config, graphs=None, separator='', syllabifier=None):
             pattern = peakedDist(_patterns, *patternmode)
             syl = populate(pattern, graphmode)
             _word = word + syl
-            for env in constraints:
-                if env and env in _word:
+            for constraint in constraints:
+                if constraint and constraint in _word:
                     break
             else:
                 word = _word
