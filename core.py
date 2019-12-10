@@ -1,26 +1,10 @@
 '''Base classes and functions
 
-Exceptions:
-    LangException -- Base exception
-    FormatError   -- Error for incorrect formatting
-
-Classes:
-    Cat         -- represents a category of phonemes
-    Word        -- represents a run of text
-    Syllabifier -- syllabifies a word based on phonotactics
-
-Functions:
-    resolveTargetRef -- substitutes a target into a pattern list
-    sliceIndices -- returns absolute indices for slice indices on an iterable
-    parseCats    -- parses a set of categories
-    parseWord    -- parses a string of graphemes
-    split         -- splits a string
-''''''
 ==================================== To-do ====================================
 === Bug-fixes ===
 
 === Implementation ===
-Perhaps adjust Cat.__init__ to allow sequences of graphemes to be stored
+Perhaps adjust Cat to allow sequences of graphemes to be stored
 
 === Features ===
 Something something punctuation
