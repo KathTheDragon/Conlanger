@@ -881,11 +881,10 @@ def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
     # Try to get graphs and separator from the initial categories
     graphs = cats.get('graphs', None)
     separator = cats.get('separator', [''])[0]
-    for name, value in _cats[:2]:
-        if name == 'graphs' and graphs is None:
-            graphs = value
-        elif name == 'separator' and separator == '':
-            separator = value[0]
+    if graphs is None and _cats[0][0] == 'graphs':
+        graphs = _cats[0][1]
+        if separator is '' and _cats[1][0] == 'separator':
+            separator = _cats[1][1][0]
     wordset = parseWordset(wordset, graphs, separator, syllabifier)
     for line in wordset:
         if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
