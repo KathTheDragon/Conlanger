@@ -236,7 +236,7 @@ class Optional(Element):
     pattern: List[Token]
 
     def __str__(self):
-        pattern = ''.join(str(token) for token in self.pattern)  # Could be improved probably
+        pattern = ''.join(str(element) for element in self.pattern)  # Could be improved probably
         return f'({pattern})' if self.greedy else f'({pattern})?'
 
     @staticmethod
@@ -478,15 +478,15 @@ def matchPattern(word, pattern, start, end, step, stack=None):
     # Hacky thing for now to make wildcard repetitions actually work in rtl
     pattern = pattern.copy()
     if step < 0:
-        for i, token in enumerate(pattern):
-            if token.type == 'WildcardRep':
+        for i, element in enumerate(pattern):
+            if element.type == 'WildcardRep':
                 pattern[i-1:i+1] = reversed(pattern[i-1:i+1])
     matched = True
     while 0 <= ix < len(pattern):
         if start <= pos < end:  # Still in the slice
-            token = pattern[ix]
-            if not isinstance(token, Optional):
-                matched, length, ilength, _stack, _catixes = token.match(word, pos, ix, step, istep)
+            element = pattern[ix]
+            if not isinstance(element, Optional):
+                matched, length, ilength, _stack, _catixes = element.match(word, pos, ix, step, istep)
                 stack.extend(_stack)
                 catixes.extend(_catixes)
             else:  # Optionals require special handling
@@ -495,7 +495,7 @@ def matchPattern(word, pattern, start, end, step, stack=None):
                         _stack = stack.pop()
                 else:
                     _stack = []
-                if token.greedy:  # Greedy
+                if element.greedy:  # Greedy
                     if ix < len(pattern)-istep and pattern[ix+istep].type == 'WildcardRep':  # We need to make sure to step past a wildcard repetition
                         stack.append((pos, ix+istep*2))
                     else:
@@ -509,14 +509,14 @@ def matchPattern(word, pattern, start, end, step, stack=None):
                         ilength = istep
                     matched = True
                     length = 0
-                if token.greedy or not matched:
+                if element.greedy or not matched:
                     _start, _end = (pos, end) if istep > 0 else (start, pos+1)
-                    matched, rpos, _catixes, _stack = matchPattern(word, token.pattern, _start, _end, step, _stack)
-                    # Merge in the stack - if a reference has an index within token, nest it and push a reference to
-                    # the token, else correct the index and push it directly
+                    matched, rpos, _catixes, _stack = matchPattern(word, element.pattern, _start, _end, step, _stack)
+                    # Merge in the stack - if a reference has an index within element, nest it and push a reference to
+                    # the element, else correct the index and push it directly
                     for _pos, _ix in _stack:
-                        if _ix >= len(token.pattern):
-                            _ix -= len(token.pattern)-1
+                        if _ix >= len(element.pattern):
+                            _ix -= len(element.pattern)-1
                             stack.append((_pos, _ix))
                         else:
                             if len(stack) >= 2 and isinstance(stack[-2], list):

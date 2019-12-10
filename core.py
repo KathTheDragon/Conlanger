@@ -381,11 +381,11 @@ class Word:
 # == Functions == #
 def resolveTargetRef(pattern, target):
     _pattern = []
-    for token in pattern:
-        if token.type == 'TargetRef':
-            _pattern.extend(token.resolveTarget(target))
+    for element in pattern:
+        if element.type == 'TargetRef':
+            _pattern.extend(element.resolveTarget(target))
         else:
-            _pattern.append(token)
+            _pattern.append(element)
     return _pattern
 
 def sliceIndices(iter, start=None, end=None):
@@ -519,4 +519,4 @@ def partition(sequence, *, sep=None, sepfunc=None, yieldsep=False):
         yield sequence[i:]
 
 def partitionTokens(tokens, sep=None, yieldsep=True):
-    yield from partition(tokens, sepfunc=(lambda token: token.type == sep), yieldsep=yieldsep)
+    yield from partition(tokens, sepfunc=(lambda element: element.type == sep), yieldsep=yieldsep)
