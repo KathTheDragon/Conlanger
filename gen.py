@@ -117,7 +117,7 @@ def populateAll(pattern):
                 result.append(str(token))
     return results
 
-def genFromConfig(config, graphs, syllabifier=None):
+def genFromConfig(config, graphs=None, separator='', syllabifier=None):
     '''Generate a single word as specified by the 'config'.
 
     Arguments:
@@ -128,7 +128,7 @@ def genFromConfig(config, graphs, syllabifier=None):
 
     Raises ExceededMaxRunsError when the word repeatedly fails to be valid
     '''
-    word = Word(['#'], graphs, syllabifier)
+    word = Word(['#'], graphs, separator, syllabifier)
     patterns, constraints, sylrange, sylmode, patternmode, graphmode = config
     sylcount = peakedDist(sylrange, *sylmode)
     for i in range(sylcount):
