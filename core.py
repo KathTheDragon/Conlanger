@@ -197,14 +197,8 @@ class Word:
         yield from self.phones
 
     def __contains__(self, item):
-        from .sce import GlobalEnvironment
         if isinstance(item, (list, Word)):
             return self.find(item) != -1
-        elif isinstance(item, GlobalEnvironment):
-            pattern, indices = item
-            if indices is None:
-                return self.find(pattern) != -1
-            return any(self.matchPattern(pattern, index)[0] for index in indices)
         else:
             return item in self.phones
 

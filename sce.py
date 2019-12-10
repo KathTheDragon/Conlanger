@@ -207,7 +207,11 @@ class GlobalEnvironment(IndexedPattern):
             return GlobalEnvironment(resolveTargetRef(self.pattern, target))
 
     def match(self, word, pos=0, rpos=0):
-        return self in word
+        pattern, indices = self
+        if indices is None:
+            return word.find(pattern) != -1
+        else:
+            return any(word.matchPattern(pattern, index)[0] for index in indices)
 
 @dataclass
 class Flags:
