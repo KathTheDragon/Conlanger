@@ -352,12 +352,9 @@ class Rule:
                     logger.debug(f'>> Match at {matches[i][0][0]} overlaps match at {matches[i+1][0][0]}')
                     del matches[i]
         logger.debug(f'Applying matches to `{word}`')
-        phones = tuple(word)
         for match, rep in matches:
             logger.debug(f'> Changing `{list(word[match[0]:match[1]])}` to `{rep}` at {match[0]}')
             word = word.applyMatch(match, rep)
-        if phones == tuple(word):
-            raise WordUnchanged
         return word
 
     def checkMatch(self, match, word):
@@ -410,6 +407,8 @@ class RuleBlock(list):
                             try:
                                 wordin = word
                                 word = rule.apply(word)
+                                if wordin == word:
+                                    raise WordUnchanged
                                 logger.info(f'`{wordin}` -> `{rule}` -> `{word}`')
                                 continue
                             except RuleFailed:  # The rule didn't apply, make note of this
