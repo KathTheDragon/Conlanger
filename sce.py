@@ -754,7 +754,7 @@ def compileRule(line, linenum=0, cats=None):
             i = j
             if type in ('MOVE', 'COPY', 'REPLACEMENT'):
                 if 'reps' in fields:  # Detected an otherwise
-                    fields['otherwise'] = compileRule(fields.get('tars', []) + tokens[j:ix+1], cats)
+                    fields['otherwise'] = compileRule(fields.get('tars', []) + tokens[j:ix+1], cats=cats)
                     break
             elif type == 'END':
                 break
