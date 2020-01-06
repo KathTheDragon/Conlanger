@@ -2,7 +2,6 @@
 
 Exceptions:
     RuleFailed    -- exception to mark that a rule failed
-    WordUnchanged -- exception to break out of repeated rule application
 
 Classes:
     Rule -- represents a sound change rule
@@ -109,9 +108,6 @@ logger = None
 # == Exceptions == #
 class RuleFailed(LangException):
     '''Used to indicate that the rule failed to be applied.'''
-
-class WordUnchanged(LangException):
-    '''Used to indicate that the word was not changed by the rule.'''
 
 # == Classes == #
 @dataclass
@@ -273,7 +269,6 @@ class Rule:
             word -- the word to which the rule is to be applied (Word)
 
         Raises RuleFailed if the rule did not apply to the word.
-        Raises WordUnchanged if the word was not changed by the rule.
         '''
         logger.debug(f'This rule: `{self}`')
         # Get all target matches, filtered by given indices
@@ -404,21 +399,21 @@ class RuleBlock(list):
                     for j in range(flags.repeat):
                         if randint(1, 100) <= flags.chance:
                             applied = True
+                            wordin = word
                             try:
-                                wordin = word
                                 word = rule.apply(word)
-                                if wordin == word:
-                                    raise WordUnchanged
-                                logger.info(f'`{wordin}` -> `{rule}` -> `{word}`')
-                                continue
-                            except RuleFailed:  # The rule didn't apply, make note of this
+                            except RuleFailed:
                                 applied = False
                                 logger.info(f'`{rule}` does not apply to `{word}`')
-                            except WordUnchanged:  # If the word didn't change, stop applying
+                                break
+                            except RuleError as e:
+                                logger.warning(f'`{rule}` execution suffered an error: {e}')
+                                break
+                            if wordin == word:
                                 logger.info(f'`{rule}` does not change `{word}`')
-                            except RuleError as e:  # Some other problem occurred
-                                logger.warning(f'{rule} execution suffered an error: {e}')
-                            break
+                                break
+                            else:
+                                logger.info(f'`{wordin}` -> `{rule}` -> `{word}`')
                         else:
                             applied = False
                             logger.info(f'`{rule}` was randomly not run on `{word}`')
