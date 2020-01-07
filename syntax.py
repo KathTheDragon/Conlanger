@@ -12,6 +12,7 @@ Multi-word labels require that triangle thing
 '''
 
 import re
+from dataclasses import dataclass, field
 from math import floor
 from PIL import Image, ImageDraw, ImageFont
 from .core import LangException, Token, CompilerError, TokenError
@@ -54,21 +55,8 @@ class UnexpectedToken(Exception):
 ## Classes
 @dataclass
 class Tree:
-    def __init__(self, parent, tree, leaves):
-        self.parent = parent
-        if tree.startswith('['):  # Tree
-            if not tree.endswith(']'):
-                raise TreeFormatError(f'unbalanced brackets: {tree}')
-            tree = tree[1:-1]
-        tree = split(tree, nesting=(0,'([',')]'), minimal=True)
-        self.label = tree[0]
-        self.children = tree[1:]
-        if isinstance(leaves, str):
-            leaves = split(leaves, nesting=(0,'(',')'), minimal=True)
-            for i, leaf in enumerate(leaves):
-                if leaf.startswith('('):
-                    leaves[i] = leaf[1:-1]
-        self.leaves = leaves
+    label: str
+    children: list = field(default_factory=list)
 
     def __len__(self):
         return len(self.children)
@@ -78,9 +66,6 @@ class Tree:
 
     def __iter__(self):
         yield from self.children
-
-    def __contains__(self, item):
-        return item in self.children
 
     def __str__(self):
         children = ' '.join(str(child) for child in self)
@@ -100,133 +85,43 @@ class Tree:
     ## Tree geometry
     @property
     def isleaf(self):
-        return False
-    
-    @property
-    def isroot(self):
-        return self.parent is None
+        return self.children == []
 
     @property
     def depth(self):
-        return max(child.depth for child in self) + 1
-
-    @property
-    def layer(self):
-        return 0 if self.isroot else (self.parent.layer + 1)
+        if self.isleaf:
+            return 0
+        else:
+            return max(child.depth for child in self) + 1
 
     ## Tree Size
     @property
-    def pixelwidth(self):
-        return max(self.labelwidth, GAP_WIDTH*(len(self)-1)+sum(child.pixelwidth for child in self))
+    def childrenwidth(self):
+        return max(0, GAP_WIDTH*(len(self)-1) + sum(child.width for child in self))
 
     @property
-    def pixelheight(self):
+    def width(self):
+        return max(self.labelwidth, self.childrenwidth)
+
+    @property
+    def height(self):
         return POINT_SIZE + self.depth * LAYER_HEIGHT
 
-    @property
-    def imsize(self):
-        return (self.pixelwidth + PADDING*2, self.pixelheight + PADDING*2)
-
+    ## Label
     @property
     def labelwidth(self):
         return FONT.getsize(self.label)[0]
-    
+
+    @property
+    def labelmiddle(self):
+        if len(self) <= 1:
+            return floor(self.width/2)
+        else:
+            return floor((self[0].labelmiddle + (self.width - self[-1].width + self[-1].labelmiddle))/2)
+
     @property
     def labelleft(self):
         return self.labelmiddle - floor(self.labelwidth/2)
-    
-    @property
-    def labeltop(self):
-        return PADDING + self.layer * LAYER_HEIGHT
-    
-    @property
-    def labelmiddle(self):
-        return floor((self[0].labelmiddle + self[-1].labelmiddle)/2)
-    
-    ## Methods ##
-    def draw(self, draw):
-        # Draw label
-        labelcolour = 'red' if self.isleaf else 'blue'
-        draw.text((self.labelleft, self.labeltop), self.label, labelcolour, FONT)
-        # Draw line
-        if not self.isroot:
-            linetop = (self.parent.labelmiddle, self.parent.labeltop + POINT_SIZE + 1)
-            linebottom = (self.labelmiddle, self.labeltop - 1)
-            linecolour = 'lightgrey' if self.isleaf else 'black'
-            draw.line([linetop, linebottom], linecolour, 1)
-        # Draw descendents
-        for child in self:
-            child.draw(draw)
-
-class Leaf(Tree):
-    __slots__ = ('leaves', 'index')
-    
-    def __init__(self, tree):
-        self.parent = tree.parent
-        self.label = tree.label
-        self.children = tree.children
-        self.leaves = tree.leaves
-        self.index = None
-        if self.label.startswith('('):
-            self.label = self.label[1:-1]
-            if ' ' not in self.label:  # Index
-                self.index = int(self.label)
-                self.label = self.leaves[self.index]
-        if self.index is None:
-            if self.label not in self.leaves:
-                raise TreeFormatError(f'explicit leaf labels must be present in `leaves`: {self.label}')
-            self.index = self.leaves.index(self.label)
-        self.leaves[self.index] = self
-    
-    @property
-    def isleaf(self):
-        return True
-    
-    @property
-    def depth(self):
-        return 0
-    
-    @property
-    def pixelwidth(self):
-        return max(self.labelwidth, self.parent.labelwidth if len(self.parent) == 1 else 0)
-    
-    @property
-    def labelmiddle(self):
-        return PADDING + self.index * GAP_WIDTH + sum(leaf.pixelwidth for leaf in self.leaves[:self.index]) + floor(self.pixelwidth/2)
-
-class DependencyTree(Tree):
-    def __init__(self, *args):
-        super().__init__(*args)
-        for i, child in enumerate(self):
-            self.children[i] = DependencyTree(self, child, self.leaves)
-            if len(self[i]) == 0:
-                self.children[i] = DependencyLeaf(self[i])
-        if sum(child.isleaf for child in self) > 1:
-            raise TreeFormatError('dependency tree nodes can have at most one child that is a leaf')
-
-    @property
-    def labelmiddle(self):
-        for child in self:
-            if child.isleaf:
-                return child.labelmiddle
-        else:
-            return super().labelmiddle
-
-class DependencyLeaf(Leaf):
-    @property
-    def layer(self):
-        return max(leaf.parent.layer for leaf in self.leaves) + 1
-
-class ConstituencyTree(Tree):
-    def __init__(self, *args):
-        super().__init__(*args)
-        for i, child in enumerate(self):
-            self.children[i] = ConstituencyTree(self, child, self.leaves)
-            if len(self[i]) == 0:
-                self.children[i] = ConstituencyLeaf(self[i])
-
-class ConstituencyLeaf(Leaf):
-    pass
 
 ## Compiling Functions
 def tokenise(string):
@@ -277,12 +172,35 @@ def compileTree(tokens):
             raise UnexpectedToken(tokens[i])
     return Node(label, children)
 
-def drawtree(tree, leaves, mode):
-    if mode == 'dep':
-        tree = DependencyTree(None, tree, leaves)
-    else:
-        tree = ConstituencyTree(None, tree, leaves)
-    im = Image.new('RGB', tree.imsize, 'white')
+## Drawing Functions
+def drawDependency(tree, draw, depth, top, left):
+    # Draw label
+
+def drawConstituency(tree, draw, top, left):
+    # Draw label
+    labelcolour = 'red' if tree.isleaf else 'blue'
+    draw.text((left+tree.labelleft, top), tree.label, labelcolour, FONT)
+    # Draw descendents
+    linetop = (left+tree.labelmiddle, top+POINT_SIZE+1)
+    top += LAYER_HEIGHT
+    left += floor((tree.width - tree.childrenwidth)/2)
+    for child in tree:
+        # Draw line
+        linebottom = (left+child.labelmiddle, top-1)
+        linecolour = 'darkgrey' if child.isleaf else 'black'
+        draw.line([linetop, linebottom], linecolour, 1)
+        # Draw child
+        drawConstituency(child, draw, top, left)
+        # Next child
+        left += child.width + GAP_WIDTH
+
+def drawTree(string, mode):
+    tree = Node.make(string)
+    size = (tree.width + PADDING*2, tree.height + PADDING*2)
+    im = Image.new('RGB', size, 'white')
     draw = ImageDraw.Draw(im)
-    tree.draw(draw)
+    if mode == 'dep':
+        drawDependency(tree, draw, tree.depth, PADDING, PADDING)
+    else:
+        drawConstituency(tree, draw, PADDING, PADDING)
     return im
