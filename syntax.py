@@ -13,9 +13,9 @@ Multi-word labels require that triangle thing
 
 from math import floor
 from PIL import Image, ImageDraw, ImageFont
-from .core import split, LangException
+from .core import LangException, Token, CompilerError, TokenError
 
-# == Constants == #
+## Constants
 POINT_SIZE = 16
 FONT = ImageFont.truetype('calibri.ttf', POINT_SIZE)
 GAP_WIDTH = POINT_SIZE  # minimum horizontal spacing between trees
@@ -23,17 +23,16 @@ GAP_HEIGHT = POINT_SIZE  # minimum vertical spacing between layers
 LAYER_HEIGHT = GAP_HEIGHT + POINT_SIZE
 PADDING = POINT_SIZE  # Padding around the edge of the image
 
-# == Exceptions == #
+## Exceptions
 class TreeException(LangException):
     pass
 
 class TreeFormatError(TreeException):
     pass
 
-# == Classes == #
-class Tree():
-    __slots__ = ('parent', 'label', 'children', 'leaves')
-    
+## Classes
+@dataclass
+class Tree:
     def __init__(self, parent, tree, leaves):
         self.parent = parent
         if tree.startswith('['):  # Tree
@@ -49,27 +48,27 @@ class Tree():
                 if leaf.startswith('('):
                     leaves[i] = leaf[1:-1]
         self.leaves = leaves
-    
+
     def __len__(self):
         return len(self.children)
-    
+
     def __getitem__(self, key):
         return self.children[key]
-    
+
     def __iter__(self):
-        return iter(self.children)
-    
+        yield from self.children
+
     def __contains__(self, item):
         return item in self.children
-    
+
     def __str__(self):
         children = ' '.join(str(child) for child in self)
         return f'[{self.label} {children}]' if children else f'[{self.label}]'
-    
+
     def __repr__(self):
         return f'Tree("{self}")'
-    
-    ## Tree geometry ##
+
+    ## Tree geometry
     @property
     def isleaf(self):
         return False
@@ -77,28 +76,28 @@ class Tree():
     @property
     def isroot(self):
         return self.parent is None
-    
+
     @property
     def depth(self):
         return max(child.depth for child in self) + 1
-    
+
     @property
     def layer(self):
         return 0 if self.isroot else (self.parent.layer + 1)
-    
-    ## Tree Size ##
+
+    ## Tree Size
     @property
     def pixelwidth(self):
         return max(self.labelwidth, GAP_WIDTH*(len(self)-1)+sum(child.pixelwidth for child in self))
-    
+
     @property
     def pixelheight(self):
         return POINT_SIZE + self.depth * LAYER_HEIGHT
-    
+
     @property
     def imsize(self):
         return (self.pixelwidth + PADDING*2, self.pixelheight + PADDING*2)
-    
+
     @property
     def labelwidth(self):
         return FONT.getsize(self.label)[0]
@@ -175,7 +174,7 @@ class DependencyTree(Tree):
                 self.children[i] = DependencyLeaf(self[i])
         if sum(child.isleaf for child in self) > 1:
             raise TreeFormatError('dependency tree nodes can have at most one child that is a leaf')
-    
+
     @property
     def labelmiddle(self):
         for child in self:
