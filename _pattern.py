@@ -236,8 +236,8 @@ class Optional(Element):
     pattern: List[Token]
 
     def __str__(self):
-        pattern = ''.join(str(element) for element in self.pattern)  # Could be improved probably
-        return f'({pattern})' if self.greedy else f'({pattern})?'
+        string = unparsePattern(self.pattern)
+        return f'({string})' if self.greedy else f'({string})?'
 
     @staticmethod
     def make(string, cats=None):
@@ -422,6 +422,18 @@ def parsePattern(pattern, cats=None):
         return compile(tokenise(pattern), cats)
     except CompilerError as e:
         raise FormatError(f'invalid pattern: {pattern!r}; {e.args[0]}')
+
+def unparsePattern(pattern, graphs=None, separator=''):
+    from .core import unparseWord
+    # Add collapsing repeated tokens
+    elements = []
+    for element in pattern:
+        if isinstance(element, Optional):
+            string = unparsePattern(element.pattern, graphs, separator)
+            elements.append(f'({string})' if self.greedy else f'({string})?')
+        else:
+            elements.append(str(element))
+    return unparseWord(elements, graphs, separator)
 
 def parsePatterns(patterns, cats=None):
     '''Parses generation patterns.
