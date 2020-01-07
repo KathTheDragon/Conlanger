@@ -78,7 +78,7 @@ class Tree:
     def make(string):
         tokens = list(tokenise(string))
         if tokens[0].type == 'LBRACKET' and tokens[-1].type == 'RBRACKET':
-            return compileNode(tokens[1:-1])
+            return compileTree(tokens[1:-1])
         else:
             raise TreeFormatError('invalid syntax')
 
@@ -163,14 +163,14 @@ def compileTree(tokens):
         type, value = tokens[i]
         if type == 'LBRACKET':
             j = matchBrackets(tokens, i)
-            children.append(compileNode(tokens[i+1:j-1]))
+            children.append(compileTree(tokens[i+1:j-1]))
             i = j
         elif type == 'STRING':
-            children.append(Node(value))
+            children.append(Tree(value))
             i += 1
         else:
             raise UnexpectedToken(tokens[i])
-    return Node(label, children)
+    return Tree(label, children)
 
 ## Drawing Functions
 def drawDependency(tree, draw, depth, top, left):
@@ -195,7 +195,7 @@ def drawConstituency(tree, draw, top, left):
         left += child.width + GAP_WIDTH
 
 def drawTree(string, mode):
-    tree = Node.make(string)
+    tree = Tree.make(string)
     size = (tree.width + PADDING*2, tree.height + PADDING*2)
     im = Image.new('RGB', size, 'white')
     draw = ImageDraw.Draw(im)
