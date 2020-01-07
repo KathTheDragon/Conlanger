@@ -123,6 +123,26 @@ class Tree:
     def labelleft(self):
         return self.labelmiddle - floor(self.labelwidth/2)
 
+    @property
+    def deplabelmiddle(self):
+        ix = None
+        leaf = None
+        for i, child in enumerate(self):
+            if child.isleaf:
+                if leaf is None:
+                    ix = i
+                    leaf = child
+                else:
+                    raise TreeFormatError('dependency nodes may have at most one leaf child')
+        if leaf is None:
+            return self.labelmiddle
+        else:
+            return sum(child.width for child in self[:ix]) + GAP_WIDTH*ix + floor((self.width-self.childrenwidth)/2) + floor(leaf.labelwidth/2)
+
+    @property
+    def deplabelleft(self):
+        return self.deplabelmiddle - floor(self.labelwidth/2)
+
 ## Compiling Functions
 def tokenise(string):
     for match in TOKEN_REGEX.finditer(string):
@@ -175,6 +195,25 @@ def compileTree(tokens):
 ## Drawing Functions
 def drawDependency(tree, draw, leaftop, top, left):
     # Draw label
+    labelcolour = 'red' if tree.isleaf else 'blue'
+    draw.text((left+tree.deplabelleft, top), tree.label, labelcolour, FONT)
+    # Draw descendents
+    linetop = (left+tree.deplabelmiddle, top+POINT_SIZE+1)
+    top += LAYER_HEIGHT
+    left += floor((tree.width - tree.childrenwidth)/2)
+    for child in tree:
+        if child.isleaf:
+            _top = leaftop
+        else:
+            _top = top
+        # Draw line
+        linebottom = (left+child.deplabelmiddle, _top-1)
+        linecolour = 'darkgrey' if child.isleaf else 'black'
+        draw.line([linetop, linebottom], linecolour, 1)
+        # Draw child
+        drawDependency(child, draw, leaftop, _top, left)
+        # Next child
+        left += child.width + GAP_WIDTH
 
 def drawConstituency(tree, draw, top, left):
     # Draw label
