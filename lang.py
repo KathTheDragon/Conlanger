@@ -5,7 +5,6 @@ Classes:
     Language -- represents a language
 
 Functions:
-    unparse_pattern -- unparse a generation pattern back to a string
     load_lang       -- load the data from the named language file
     save_lang       -- save the given language's data to file
 ''''''
@@ -28,6 +27,7 @@ from collections import namedtuple
 import os
 import json
 from .core import Cat, Syllabifier, parse_patterns, parse_cats, unparse_word
+from ._pattern import parsePatterns, unparsePattern
 from . import gen, sce
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Language files are in conlanger/langs/
@@ -100,9 +100,9 @@ class Language:
         	rule = rule.copy()
         	for i in reversed(indices):
         		rule.insert(i, '$')
-        	data['syllabifier'].append(unparse_pattern(rule))
+        	data['syllabifier'].append(unparsePattern(rule))
         if self.phonotactics is not None:
-            data['phonotactics'] = {k: [unparse_pattern(pattern) for pattern in v] for k, v in self.phonotactics.items()}
+            data['phonotactics'] = {k: [unparsePattern(pattern) for pattern in v] for k, v in self.phonotactics.items()}
         return data
 
     def gen(self, config, num=1):
@@ -160,20 +160,6 @@ def save_lang(lang):
             else:
                 return
         json.dump(data)
-
-def unparse_pattern(pattern):
-    # Add collapsing repeated tokens
-    for i, token in reversed(list(enumerate(pattern))):
-        if isinstance(token, int):  # Integer repetition
-            pattern[i] = f'{{{pattern[i]}}}'
-        # This probably should be moved to _pattern
-        elif token.type == 'Optional':
-            pattern[i] = f'({unparse_pattern(token.pattern)})'
-            if not token.greedy:
-                pattern[i] = pattern[i] + '?'
-        else:
-            pattern[i] = str(token)
-    return unparse_word(pattern)
 
 def getcwd():
     print(os.getcwd())
