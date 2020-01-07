@@ -173,7 +173,7 @@ def compileTree(tokens):
     return Tree(label, children)
 
 ## Drawing Functions
-def drawDependency(tree, draw, depth, top, left):
+def drawDependency(tree, draw, leaftop, top, left):
     # Draw label
 
 def drawConstituency(tree, draw, top, left):
@@ -200,7 +200,8 @@ def drawTree(string, mode):
     im = Image.new('RGB', size, 'white')
     draw = ImageDraw.Draw(im)
     if mode == 'dep':
-        drawDependency(tree, draw, tree.depth, PADDING, PADDING)
+        leaftop = PADDING + tree.depth*LAYER_HEIGHT
+        drawDependency(tree, draw, leaftop, PADDING, PADDING)
     else:
         drawConstituency(tree, draw, PADDING, PADDING)
     return im
