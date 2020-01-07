@@ -11,6 +11,7 @@ Multi-word labels require that triangle thing
 === Style ===
 '''
 
+import re
 from math import floor
 from PIL import Image, ImageDraw, ImageFont
 from .core import LangException, Token, CompilerError, TokenError
@@ -23,12 +24,32 @@ GAP_HEIGHT = POINT_SIZE  # minimum vertical spacing between layers
 LAYER_HEIGHT = GAP_HEIGHT + POINT_SIZE
 PADDING = POINT_SIZE  # Padding around the edge of the image
 
+## Tokens
+TOKENS = {
+    'LBRACKET': r'\[',
+    'RBRACKET': r'\]',
+    'WHITESPACE': r' +',
+    'QUOTED': r'\".*?\"',
+    'INDEX': r'[₀-₉]+',
+    'STRING': r'[^\[\]₀-₉ ]+',
+    'UNKNOWN': r'.'
+}
+TOKEN_REGEX = re.compile('|'.join(f'(?P<{type}>{regex})' for type, regex in TOKENS.items()))
+
 ## Exceptions
 class TreeException(LangException):
     pass
 
 class TreeFormatError(TreeException):
     pass
+
+class UnexpectedToken(Exception):
+    def __init__(self, token, expected=None):
+        type, value, linenum, column = token.type.lower(), token.value, token.linenum, token.column
+        if expected is None:
+            super().__init__(f'Unexpected {type} token: {value} @ {linenum}:{column}')
+        else:
+            super().__init__(f'Unexpected {type} token, expected {expected}: {value} @ {linenum}:{column}')
 
 ## Classes
 @dataclass
@@ -67,6 +88,14 @@ class Tree:
 
     def __repr__(self):
         return f'Tree("{self}")'
+
+    @staticmethod
+    def make(string):
+        tokens = list(tokenise(string))
+        if tokens[0].type == 'LBRACKET' and tokens[-1].type == 'RBRACKET':
+            return compileNode(tokens[1:-1])
+        else:
+            raise TreeFormatError('invalid syntax')
 
     ## Tree geometry
     @property
@@ -198,6 +227,55 @@ class ConstituencyTree(Tree):
 
 class ConstituencyLeaf(Leaf):
     pass
+
+## Compiling Functions
+def tokenise(string):
+    for match in TOKEN_REGEX.finditer(string):
+        type = match.lastgroup
+        value = match.group()
+        column = match.start()
+        if type == 'WHITESPACE':
+            continue
+        elif type == 'QUOTED':
+            type = 'STRING'
+            value = value.strip('"')
+        elif type == 'INDEX':
+            value = value.translate(str.maketrans('₀₁₂₃₄₅₆₇₈₉', '0123456789'))
+        elif type == 'UNKNOWN':
+            raise CompilerError('unexpected character', value, 0, column)
+        yield Token(type, value, 0, column)
+
+def matchBrackets(tokens, start=0):
+    if tokens[start].type != 'LBRACKET':
+        raise UnexpectedToken(tokens[start], 'lbracket')
+    depth = 0
+    for i, token in enumerate(tokens[start:], start+1):
+        if token.type == 'LBRACKET':
+            depth += 1
+        elif token.type == 'RBRACKET':
+            depth -= 1
+            if depth == 0:
+                return i
+    raise TokenError(f'unmatched bracket', tokens[start])
+
+def compileTree(tokens):
+    if tokens[0].type != 'STRING':
+        raise UnexpectedToken(tokens[0], 'string')
+    label = tokens[0].value
+    children = []
+    i = 1
+    while i < len(tokens):
+        type, value = tokens[i]
+        if type == 'LBRACKET':
+            j = matchBrackets(tokens, i)
+            children.append(compileNode(tokens[i+1:j-1]))
+            i = j
+        elif type == 'STRING':
+            children.append(Node(value))
+            i += 1
+        else:
+            raise UnexpectedToken(tokens[i])
+    return Node(label, children)
 
 def drawtree(tree, leaves, mode):
     if mode == 'dep':
