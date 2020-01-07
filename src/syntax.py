@@ -44,13 +44,13 @@ class TreeException(LangException):
 class TreeFormatError(TreeException):
     pass
 
-class UnexpectedToken(Exception):
+class UnexpectedToken(TokenError):
     def __init__(self, token, expected=None):
-        type, value, linenum, column = token.type.lower(), token.value, token.linenum, token.column
+        type = token.type.lower()
         if expected is None:
-            super().__init__(f'Unexpected {type} token: {value} @ {linenum}:{column}')
+            super().__init__(f'Unexpected {type} token', token)
         else:
-            super().__init__(f'Unexpected {type} token, expected {expected}: {value} @ {linenum}:{column}')
+            super().__init__(f'Unexpected {type} token, expected {expected}', token)
 
 ## Classes
 @dataclass
