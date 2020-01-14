@@ -2,6 +2,6 @@ __pycache__/
 langs/
 trees/
 examples.py
-diach.py
+correspondences.py
 interface.py
 *.dat
