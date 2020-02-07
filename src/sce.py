@@ -37,6 +37,7 @@ import logging
 import logging.config
 import os.path
 import re
+from contextlib import suppress
 from dataclasses import dataclass, InitVar
 from .core import LangException, FormatError, RuleError, CompilerError, TokenError, Token, Cat, Word, resolveTargetRef, parseCats, partitionTokens
 from ._pattern import tokenise as tokenisePattern, compile as compilePattern
@@ -773,19 +774,11 @@ def compileLine(line, linenum=0, cats=None):
     if not line:
         return None
     # Attempt to tokenise as category
-    try:
+    with suppress(CompilerError, FormatError):
         return compileCategory(line, linenum, cats)
-    except TokenError:
-        raise
-    except:
-        pass
     # Attempt to tokenise as metarule
-    try:
+    with suppress(CompilerError, FormatError):
         return compileMetarule(line, linenum)
-    except TokenError:
-        raise
-    except:
-        pass
     # Attempt to tokenise as rule
     return compileRule(line, linenum, cats)
 
