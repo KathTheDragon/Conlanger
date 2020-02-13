@@ -3,8 +3,8 @@
 === Bug-fixes ===
 
 === Implementation ===
-Anti-aliasing: https://stackoverflow.com/questions/14350645/is-there-an-antialiasing-method-for-python-pil
 Multi-word labels require that triangle thing
+Need to reimplement discontinuities somehow
 
 === Features ===
 
@@ -18,7 +18,8 @@ from PIL import Image, ImageDraw, ImageFont
 from .core import LangException, Token, CompilerError, TokenError
 
 ## Constants
-POINT_SIZE = 16
+SCALE = 10
+POINT_SIZE = 16*SCALE
 FONT = ImageFont.truetype('calibri.ttf', POINT_SIZE)
 GAP_WIDTH = POINT_SIZE  # minimum horizontal spacing between trees
 GAP_HEIGHT = POINT_SIZE  # minimum vertical spacing between layers
@@ -198,7 +199,7 @@ def drawDependency(tree, draw, leaftop, top, left):
     labelcolour = 'red' if tree.isleaf else 'blue'
     draw.text((left+tree.deplabelleft, top), tree.label, labelcolour, FONT)
     # Draw descendents
-    linetop = (left+tree.deplabelmiddle, top+POINT_SIZE+1)
+    linetop = (left+tree.deplabelmiddle, top+POINT_SIZE+SCALE)  # We want 1px gap between label and line after rescaling
     top += LAYER_HEIGHT
     left += floor((tree.width - tree.childrenwidth)/2)
     for child in tree:
@@ -207,9 +208,9 @@ def drawDependency(tree, draw, leaftop, top, left):
         else:
             _top = top
         # Draw line
-        linebottom = (left+child.deplabelmiddle, _top-1)
+        linebottom = (left+child.deplabelmiddle, _top-SCALE)  # Again, 1px gap between label and line after rescaling
         linecolour = 'darkgrey' if child.isleaf else 'black'
-        draw.line([linetop, linebottom], linecolour, 1)
+        draw.line([linetop, linebottom], linecolour, SCALE)  # Similarly, 1px line width after rescaling
         # Draw child
         drawDependency(child, draw, leaftop, _top, left)
         # Next child
@@ -220,14 +221,14 @@ def drawConstituency(tree, draw, top, left):
     labelcolour = 'red' if tree.isleaf else 'blue'
     draw.text((left+tree.labelleft, top), tree.label, labelcolour, FONT)
     # Draw descendents
-    linetop = (left+tree.labelmiddle, top+POINT_SIZE+1)
+    linetop = (left+tree.labelmiddle, top+POINT_SIZE+SCALE)  # We want 1px gap between label and line after rescaling
     top += LAYER_HEIGHT
     left += floor((tree.width - tree.childrenwidth)/2)
     for child in tree:
         # Draw line
-        linebottom = (left+child.labelmiddle, top-1)
+        linebottom = (left+child.labelmiddle, top-SCALE)  # Again, 1px gap between label and line after rescaling
         linecolour = 'darkgrey' if child.isleaf else 'black'
-        draw.line([linetop, linebottom], linecolour, 1)
+        draw.line([linetop, linebottom], linecolour, SCALE)  # Similarly, 1px line width after rescaling
         # Draw child
         drawConstituency(child, draw, top, left)
         # Next child
@@ -243,4 +244,4 @@ def drawTree(string, mode):
         drawDependency(tree, draw, leaftop, PADDING, PADDING)
     else:
         drawConstituency(tree, draw, PADDING, PADDING)
-    return im
+    return im.resize((size[0]//SCALE, size[1]//SCALE), resample=Image.ANTIALIAS)
