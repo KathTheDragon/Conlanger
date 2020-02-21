@@ -893,6 +893,7 @@ def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
     for line in wordset:
         if line.word is not None:  # There's a word
             logger.info(f'This word: {line.word}')
+            logger.debug(f'Segments: {line.word.phones}')
             line.word = ruleset.apply(line.word)
     if output != 'as-is':
         wordset = [str(line) for line in wordset]
