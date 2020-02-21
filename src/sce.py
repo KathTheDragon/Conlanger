@@ -427,6 +427,19 @@ class RuleBlock(list):
                     del values[i]
         return word
 
+@dataclass
+class Line:
+    word: Word = None
+    comment: str = None
+
+    def __str__(self):
+        components = []
+        if self.word is not None:
+            components.append(str(self.word))
+        if self.comment is not None:
+            components.append(f'//{self.comment}')
+        return ' '.join(components)
+
 # == Functions == #
 def parseWordset(wordset, graphs=None, separator=None, syllabifier=None):
     '''Parses a wordlist.
@@ -442,18 +455,18 @@ def parseWordset(wordset, graphs=None, separator=None, syllabifier=None):
     _wordset = []
     for word in wordset:
         if isinstance(word, Word):
-            line = [word]
-        elif isinstance(word, list):
+            line = Line(word=word)
+        elif isinstance(word, Line):
             line = word
         elif word.startswith('//'):  # Is a comment
-            line = [word[2:]]
+            line = Line(comment=word[2:])
         elif '//' in word:  # Contains a comment
             word, comment = word.split('//', 1)
-            line = [Word(word, graphs, separator, syllabifier), comment]
+            line = Line(word=Word(word, graphs, separator, syllabifier), comment=comment)
         elif word:
-            line = [Word(word, graphs, separator, syllabifier)]
+            line = Line(word=Word(word, graphs, separator, syllabifier))
         else:
-            line = []
+            line = Line()
         _wordset.append(line)
     return _wordset
 
@@ -878,16 +891,11 @@ def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
             separator = _cats[1][1][0]
     wordset = parseWordset(wordset, graphs, separator, syllabifier)
     for line in wordset:
-        if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):  # There's a word
-            logger.info(f'This word: {line[0]}')
-            line[0] = ruleset.apply(line[0])
+        if line.word is not None:  # There's a word
+            logger.info(f'This word: {line.word}')
+            line.word = ruleset.apply(line.word)
     if output != 'as-is':
-        for i, line in enumerate(wordset):
-            if len(line) == 2 or len(line) == 1 and isinstance(line[0], str):
-                line[-1] = '//'+line[-1]
-            if len(line) == 2 or len(line) == 1 and isinstance(line[0], Word):
-                line[0] = str(line[0])
-            wordset[i] = ' '.join(line)
+        wordset = [str(line) for line in wordset]
     if output == 'str':
         wordset = '\n'.join(wordset)
     return wordset
