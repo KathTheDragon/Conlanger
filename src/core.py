@@ -424,40 +424,19 @@ def parseCats(cats, initialcats=None):
 
 WHITESPACE_REGEX = re.compile(r'\s+')
 
-def parseWord(word, graphs=(), separator=''):
-    '''Parse a string of graphemes.
-
-    Arguments:
-        word   -- the word to be parsed (str)
-        graphs -- category of graphemes (Cat)
-
-    Returns a list.
-    '''
-    # Black magic
-    # While test isn't a single character and doesn't begin any polygraph
-    #     From i=len(test) to i=1
-    #         Does test begin with a valid graph? Single characters are always valid
-    #             Add this valid graph to the output
-    #             Remove the graph from test, and remove leading instances of separator
-    word = WHITESPACE_REGEX.sub('#', word)
-    if not graphs:
-        return list(word)
+def parseWord(string, graphs=(), separator=''):
+    polygraphs = sorted(filter(lambda g: len(g) > 1, graphs), key=len, reverse=True)
+    if not polygraphs:
+        return list(string.replace(separator, ''))
     if not separator:
         separator = '.'
-    polygraphs = [graph for graph in graphs if len(graph) > 1]
-    if not polygraphs:
-        return list(word.replace(separator, ''))
-    graphemes = []
-    test = ''
-    for char in word+separator:  # Convert all whitespace to a single #
-        test += char
-        while len(test) > 1 and not any(graph.startswith(test) for graph in polygraphs):
-            for i in reversed(range(1, len(test)+1)):
-                if i == 1 or test[:i] in polygraphs:
-                    graphemes.append(test[:i])
-                    test = test[i:].lstrip(separator)
-                    break
-    return graphemes
+    word = []
+    string = WHITESPACE_REGEX.sub('#', string).lstrip(separator)
+    while string:
+        graph = next(filter(lambda p: string.startswith(p), polygraphs), string[0])
+        word.append(graph)
+        string = string[len(graph):].lstrip(separator)
+    return word
 
 def unparseWord(wordin, graphs=(), separator=''):
     word = test = ''
