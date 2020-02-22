@@ -441,7 +441,7 @@ class Line:
         return ' '.join(components)
 
 # == Functions == #
-def parseWordset(wordset, graphs=None, separator=None, syllabifier=None):
+def parseWordset(wordset, graphs=(), separator='', syllabifier=None):
     '''Parses a wordlist.
 
     Arguments:
@@ -883,7 +883,7 @@ def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
     cats = parseCats(cats or {})
     ruleset, _cats = compileRuleset(ruleset, cats)  # Compile ruleset first so we can use the graphs it contains
     # Try to get graphs and separator from the initial categories
-    graphs = cats.get('graphs', None)
+    graphs = cats.get('graphs', ())
     separator = cats.get('separator', [''])[0]
     if graphs is None and len(_cats) > 0 and _cats[0][0] == 'graphs':
         graphs = _cats[0][1]

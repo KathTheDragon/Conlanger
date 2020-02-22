@@ -158,7 +158,7 @@ class Word:
     '''
     phones: list = field(init=False)
     lexeme: InitVar[str] = ''
-    graphs: Cat = None
+    graphs: Cat = field(default_factory=Cat)
     separator: str = ''
     syllabifier: Syllabifier = None
 
@@ -206,12 +206,7 @@ class Word:
         graphs = self.graphs
         separator = self.separator
         if isinstance(other, Word):
-            if graphs == other.graphs:
-                pass
-            elif graphs is None:
-                graphs = other.graphs
-            elif other.graphs is not None:
-                graphs = graphs + other.graphs[1:]
+            graphs = Cat(list(set().union(graphs, other.graphs)))
             separator = separator or other.separator
             other = other.phones
         elif isinstance(other, str):
@@ -429,7 +424,7 @@ def parseCats(cats, initialcats=None):
 
 WHITESPACE_REGEX = re.compile(r'\s+')
 
-def parseWord(word, graphs=None, separator=''):
+def parseWord(word, graphs=(), separator=''):
     '''Parse a string of graphemes.
 
     Arguments:
@@ -445,7 +440,7 @@ def parseWord(word, graphs=None, separator=''):
     #             Add this valid graph to the output
     #             Remove the graph from test, and remove leading instances of separator
     word = WHITESPACE_REGEX.sub('#', word)
-    if graphs is None:
+    if not graphs:
         return list(word)
     if not separator:
         separator = '.'
@@ -464,9 +459,9 @@ def parseWord(word, graphs=None, separator=''):
                     break
     return graphemes
 
-def unparseWord(wordin, graphs=None, separator=''):
+def unparseWord(wordin, graphs=(), separator=''):
     word = test = ''
-    if graphs is None:
+    if not graphs:
         polygraphs = []
     else:
         polygraphs = [graph for graph in graphs if len(graph) > 1]
