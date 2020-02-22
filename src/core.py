@@ -221,17 +221,7 @@ class Word:
     def __radd__(self, other):
         graphs = self.graphs
         separator = self.separator
-        if isinstance(other, Word):
-            if graphs == other.graphs:
-                pass
-            elif graphs is None:
-                graphs = other.graphs
-            elif other.graphs is not None:
-                graphs = graphs + other.graphs[1:]
-            separator = separator or other.separator
-            other = other.phones
-        elif isinstance(other, str):
-            other = parseWord(other, graphs)
+        other = parseWord(other, graphs)
         return Word(other + self.phones, graphs, separator, self.syllabifier)
 
     def __mul__(self, other):
