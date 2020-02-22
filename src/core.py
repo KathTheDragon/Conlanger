@@ -438,8 +438,8 @@ def parseWord(string, graphs=(), separator=''):
         string = string[len(graph):].lstrip(separator)
     return word
 
-def unparseWord(wordin, graphs=(), separator=''):
-    word = test = ''
+def unparseWord(word, graphs=(), separator=''):
+    string = test = ''
     if not graphs:
         polygraphs = []
     else:
@@ -447,9 +447,9 @@ def unparseWord(wordin, graphs=(), separator=''):
     if not separator:
         separator = '.'
     if not polygraphs:
-        word = ''.join(wordin)
-        wordin = []
-    for graph in wordin:
+        string = ''.join(word)
+        word = []
+    for graph in word:
         if not any(graph in poly and graph != poly for poly in polygraphs if graph != poly):  # If not a strict substring of any polygraph
             test = ''  # Can't ever be ambiguous
         elif not test:
@@ -457,12 +457,12 @@ def unparseWord(wordin, graphs=(), separator=''):
         else:
             test += graph
             if any(poly in test and graph != poly or poly in test[:-1] for poly in polygraphs):  # If test contains a polygraph
-                word += separator  # Ambiguous, so add the separator
+                string += separator  # Ambiguous, so add the separator
                 test = graph
             elif not any(test in poly for poly in polygraphs):
                 test = test[1:]  # Could still be ambiguous with something later
-        word += graph
-    return word.strip(separator+'#').replace('#', ' ')
+        string += graph
+    return string.strip(separator+'#').replace('#', ' ')
 
 def partition(sequence, *, sep=None, sepfunc=None, yieldsep=False):
     if sep is None == sepfunc is None:
