@@ -439,28 +439,33 @@ def parseWord(string, graphs=(), separator=''):
     return word
 
 def unparseWord(word, graphs=(), separator=''):
-    string = test = ''
-    if not graphs:
-        polygraphs = []
-    else:
-        polygraphs = [graph for graph in graphs if len(graph) > 1]
-    if not separator:
-        separator = '.'
+    string = ''
+    polygraphs = list(filter(lambda g: len(g) > 1, graphs))
     if not polygraphs:
         string = ''.join(word)
         word = []
+    if not separator:
+        separator = '.'
+    ambig = []
     for graph in word:
-        if not any(graph in poly and graph != poly for poly in polygraphs if graph != poly):  # If not a strict substring of any polygraph
-            test = ''  # Can't ever be ambiguous
-        elif not test:
-            test = graph  # Nothing earlier to be ambiguous with
-        else:
-            test += graph
-            if any(poly in test and graph != poly or poly in test[:-1] for poly in polygraphs):  # If test contains a polygraph
-                string += separator  # Ambiguous, so add the separator
-                test = graph
-            elif not any(test in poly for poly in polygraphs):
-                test = test[1:]  # Could still be ambiguous with something later
+        if ambig:
+            ambig.append(graph)
+            for i in range(len(ambig)):
+                test = ''.join(ambig[i:])
+                minlength = len(ambig[i])
+                if any(test.startswith(poly) and len(poly) > minlength for poly in polygraphs):
+                    string += separator
+                    ambig = [graph]
+                    break
+            for i in range(len(ambig)):
+                test = ''.join(ambig[i:])
+                if any(poly.startswith(test) and poly != test for poly in polygraphs):
+                    ambig = ambig[i:]
+                    break
+            else:
+                ambig = []
+        elif any(poly.startswith(graph) and poly != graph for poly in polygraphs):
+            ambig.append(graph)
         string += graph
     return string.strip(separator+'#').replace('#', ' ')
 
