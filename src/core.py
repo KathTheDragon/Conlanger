@@ -425,13 +425,14 @@ def parseCats(cats, initialcats=None):
 WHITESPACE_REGEX = re.compile(r'\s+')
 
 def parseWord(string, graphs=(), separator=''):
+    string = WHITESPACE_REGEX.sub('#', string)
     polygraphs = sorted(filter(lambda g: len(g) > 1, graphs), key=len, reverse=True)
     if not polygraphs:
         return list(string.replace(separator, ''))
     if not separator:
         separator = '.'
     word = []
-    string = WHITESPACE_REGEX.sub('#', string).lstrip(separator)
+    string = string.lstrip(separator)
     while string:
         graph = next(filter(lambda p: string.startswith(p), polygraphs), string[0])
         word.append(graph)
