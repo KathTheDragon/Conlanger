@@ -885,10 +885,14 @@ def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
     # Try to get graphs and separator from the initial categories
     graphs = cats.get('graphs', ())
     separator = cats.get('separator', [''])[0]
-    if not graphs and len(_cats) > 0 and _cats[0][0] == 'graphs':
-        graphs = _cats[0][1]
-        if not separator and len(_cats) > 1 and _cats[1][0] == 'separator':
-            separator = _cats[1][1][0]
+    # Ruleset overrides externally-supplied categories
+    for name, cat in _cats:
+        if name == 'graphs':
+            graphs = cat
+        elif name == 'separator':
+            separator = cat[0]
+        else:
+            break
     wordset = parseWordset(wordset, graphs, separator, syllabifier)
     for line in wordset:
         if line.word is not None:  # There's a word
