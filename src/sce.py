@@ -885,9 +885,9 @@ def run(wordset, ruleset, cats=None, syllabifier=None, output='list'):
     # Try to get graphs and separator from the initial categories
     graphs = cats.get('graphs', ())
     separator = cats.get('separator', [''])[0]
-    if graphs is None and len(_cats) > 0 and _cats[0][0] == 'graphs':
+    if not graphs and len(_cats) > 0 and _cats[0][0] == 'graphs':
         graphs = _cats[0][1]
-        if separator is '' and len(_cats) > 1 and _cats[1][0] == 'separator':
+        if not separator and len(_cats) > 1 and _cats[1][0] == 'separator':
             separator = _cats[1][1][0]
     wordset = parseWordset(wordset, graphs, separator, syllabifier)
     for line in wordset:
