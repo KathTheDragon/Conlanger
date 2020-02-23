@@ -383,7 +383,7 @@ def compile(tokens, cats=None):
     if cats is not None and 'graphs' in cats:
         graphs = cats['graphs']
     else:
-        graphs = None
+        graphs = ()
     elements = []
     i = 0
     while i < len(tokens):
@@ -423,7 +423,7 @@ def parsePattern(pattern, cats=None):
     except CompilerError as e:
         raise FormatError(f'invalid pattern: {pattern!r}; {e.args[0]}')
 
-def unparsePattern(pattern, graphs=None, separator=''):
+def unparsePattern(pattern, graphs=(), separator=''):
     from .core import unparseWord
     # Add collapsing repeated tokens
     elements = []
