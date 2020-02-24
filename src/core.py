@@ -334,7 +334,7 @@ class Word:
                     _rep.append(cat[catixes[ix] % len(cat)])
                     ix = (ix + 1) % len(catixes)
                 elif element.type == 'Ditto':
-                    _rep.append(rep[-1] if _rep else self[pos-1])
+                    _rep.append(_rep[-1] if _rep else self[pos-1])
                 else:
                     _rep.append('')
             return self[:pos] + _rep + self[rpos:]
