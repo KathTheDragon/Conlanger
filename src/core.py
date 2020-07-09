@@ -358,7 +358,7 @@ class Word:
             if mode == 'move':  # Move - delete original target
                 word = self[:pos] + self[rpos:]
             else:
-                word = self[:]
+                word = self
             for match in sorted(matches, reverse=True):
                 word = word[:match] + target + word[match:]
             return word
