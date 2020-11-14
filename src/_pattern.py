@@ -225,7 +225,7 @@ class WildcardRep(Element):
             return WildcardRep(greedy=False)
 
     def match(self, word, pos, ix, step, istep):
-        if not self.greedy:
+        if self.greedy:
             istep *= -1
         return True, 0, istep, [(pos, ix-istep)], []
 
